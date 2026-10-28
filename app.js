@@ -843,7 +843,7 @@ function sJobs(w) {
       <div><h2>${esc(P.title)}</h2><div class="muted small">${esc(alias(P.clientId))}</div></div>
       <div class="facts"><span><b>${dayLabel(x.o.date)}</b></span><span><b class="num">${x.o.start}–${x.o.end}</b></span><span>${esc(x.o.area || "")}</span><span>Нийт ≈ <b class="num">${money(pay(x.o).gross)}</b></span></div>
       <div class="row">${reqTags(x.o)}</div>
-      ${x.b.length ? `<div class="small" style="color:var(--bad)">${x.b.map(esc).join(" · ")}</div>${x.b.includes("Сургалтын тест өгөөгүй") ? `<button class="btn sm" data-a="goLearn" data-v="${P.clientId}" style="justify-self:start">Сургалт үзэх</button>` : ""}` : `<button class="cta" data-a="apply" data-v="${x.o.id}" style="justify-self:start">За, бүртгүүлье</button>`}</article>`;
+      ${x.b.length ? `<div class="small" style="color:var(--bad)">${x.b.map(esc).join(" · ")}</div>${x.b.includes("Сургалтын тест өгөөгүй") ? `<button class="btn sm" data-a="goLearn" data-v="${P.clientId}" style="justify-self:start">Сургалт үзэх</button>` : ""}` : `<button class="cta" data-a="apply" data-v="${x.o.id}" style="justify-self:start">Бүртгүүлэх</button>`}</article>`;
     }
     const sel = pickDays[pid] || (pickDays[pid] = new Set(can.map(x => x.o.id)));
     [...sel].forEach(id => { if (!can.some(x => x.o.id === id)) sel.delete(id); });
@@ -858,7 +858,7 @@ function sJobs(w) {
       ${anyBlock ? `<div class="small" style="color:var(--bad)">${(reasons.length ? reasons : [...new Set(opts.flatMap(x => x.b))]).map(esc).join(" · ")}</div>${reasons.includes("Сургалтын тест өгөөгүй") ? `<button class="btn sm" data-a="goLearn" data-v="${P.clientId}" style="justify-self:start">Сургалт үзэх</button>` : ""}` : `
       <div class="small muted">Өдрөө сонго:</div>
       <div class="row" style="gap:6px">${opts.map(({ o, mine, b }) => mine ? `<span class="pill ${(ST[mine.st] || ST.applied)[1]} num" title="${(ST[mine.st] || ST.applied)[0]}">${shortDate(o.date)} ✓</span>` : `<label class="daychip ${b.length ? "off" : ""}" title="${esc(b.join(", "))}"><input type="checkbox" data-pick="${pid}|${o.id}" ${b.length ? "disabled" : ""} ${sel.has(o.id) ? "checked" : ""}><span class="num">${DAYS[dow(o.date)]} ${shortDate(o.date)}</span></label>`).join("")}</div>
-      ${can.length ? `<div class="row between"><span class="small">Сонгосон: <b class="num">${sel.size}</b> өдөр ≈ <b class="num">${money(total)}</b> (суутгалын өмнө)</span><button class="cta" data-a="applyMany" data-v="${pid}" ${sel.size ? "" : "disabled"}>За, бүртгүүлье</button></div>` : '<div class="small muted">Таны сул цагт таарах бүх өдөрт бүртгүүлсэн байна.</div>'}`}
+      ${can.length ? `<div class="row between"><span class="small">Сонгосон: <b class="num">${sel.size}</b> өдөр ≈ <b class="num">${money(total)}</b> (суутгалын өмнө)</span><button class="cta" data-a="applyMany" data-v="${pid}" ${sel.size ? "" : "disabled"}>Бүртгүүлэх</button></div>` : '<div class="small muted">Таны сул цагт таарах бүх өдөрт бүртгүүлсэн байна.</div>'}`}
     </article>`;
   }).join("");
   return `${hello(w)}<h2>Нээлттэй ажил</h2><p class="small muted">Хаяг нь баталгаажуулсны дараа харагдана. Сул өдөр, цагаа "Би" хэсгээс өөрчилнө.</p>${filterBar}${cards || (nF && allIds.length ? '<div class="alert info">Шүүлтүүрт таарах зар алга. Шүүлтүүрээ өөрчилнө үү.</div>' : '<div class="alert info">Одоогоор нээлттэй зар алга. Шинэ зар гарахад энд харагдана.</div>')}`;
