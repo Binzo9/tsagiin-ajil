@@ -85,6 +85,20 @@ function fmtTs(ms) { if (!ms) return ""; const d = new Date(+ms); return d.getFu
 function val(id) { const el = $("#" + id); return el ? el.value.trim() : ""; }
 function checked(id) { const el = $("#" + id); return !!(el && el.checked); }
 
+/* ---------- Туршилт: CSV, байршил ---------- */
+const BETA = '<span class="pill p-sun" title="Туршилтын боломж">Туршилт</span>';
+function downloadCSV(fname, header, rows) {
+  const q = v => { v = v == null ? "" : String(v); return /[",\n;]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const text = "\uFEFF" + [header].concat(rows).map(r => r.map(q).join(",")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  a.download = fname; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function getPos() {
+  return new Promise(res => {
+    if (!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) }), () => res(null), { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 });
+  });
+}
 const icons = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   jobs: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
@@ -228,6 +242,7 @@ function adminShell() {
 }
 function alertsList() {
   const al = [];
+  S.orders.forEach(o => o.apps.forEach(a => { if (a.leave && a.leave.st === "pending" && o.status === "open") { const w = W_(a.wid); al.push(["warn", `Чөлөө хүсэв: ${name(w)} — ${shortDate(o.date)} "${o.title}" ${o.start}–${o.end}. Шалтгаан: ${a.leave.reason}`, `<button class="btn sm primary" data-a="leaveOk" data-v="${o.id}|${a.wid}">Зөвшөөрөх</button><button class="btn sm" data-a="leaveNo" data-v="${o.id}|${a.wid}">Татгалзах</button>`]); } }));
   S.sos.forEach(s => {
     const w = W_(s.w), o = O_(s.o);
     const t = s.noshow ? `${name(w)} ${o ? shortDate(o.date) : ""}-ны ээлжид ирээгүй (хариуцагч ${s.at.slice(11)}) — орлох хүн гаргана уу` : `ЯАРАЛТАЙ: ${name(w)} тусламж хүссэн (${s.at})${w ? " · утас " + w.phone : ""}`;
@@ -304,7 +319,7 @@ function aStats() {
     return { w, shifts: mine.length, done: doneM.length, ns: mine.filter(o => o.att[w.id] && o.att[w.id].noshow).length, late: doneM.filter(o => toMin(o.att[w.id].in) > toMin(o.start) + 5).length, r: rs.length ? (rs.reduce((a, b) => a + b, 0) / rs.length).toFixed(1) : "—", earn: doneM.reduce((s, o) => s + pay(o).net, 0) }; }).filter(p => p.shifts).sort((a, b) => b.done - a.done);
   const workerPay = people.reduce((s, p) => s + p.earn, 0);
   const trs = S.clients.filter(c => training(c.id)).map(c => { const t = training(c.id); const tried = S.workers.filter(w => w.tests[c.id]); const pass = tried.filter(w => w.tests[c.id].score >= t.pass).length; return { label: c.name, v: pass, pct: pct(pass, tried.length), tip: `${tried.length} өгснөөс ${pass} тэнцсэн` }; });
-  return `<div class="row between"><h1>Тайлан, судалгаа</h1><select id="statPick" style="width:auto;max-width:100%">${ids.map(id => { const x = unit(id); return `<option value="${id}" ${id === u.id ? "selected" : ""}>${esc(cname(x.clientId))} · ${esc(x.title)}</option>`; }).join("")}</select></div>
+  return `<div class="row between"><h1>Тайлан, судалгаа</h1><div class="row"><button class="btn sm" data-a="csvAtt" data-v="${u.id}">Ирцийн CSV</button><select id="statPick" style="width:auto;max-width:100%">${ids.map(id => { const x = unit(id); return `<option value="${id}" ${id === u.id ? "selected" : ""}>${esc(cname(x.clientId))} · ${esc(x.title)}</option>`; }).join("")}</select></div></div>
   <div class="kpis">
     <div class="kpi"><b class="num">${pct(staffed, needPD)}%</b><span>Хүн бүрдүүлэлт (${staffed}/${needPD} хүн-өдөр)</span></div>
     <div class="kpi"><b class="num">${pct(present, conf)}%</b><span>Ирц (${present}/${conf})</span></div>
@@ -380,6 +395,7 @@ function orderForm(d, mode) {
     <label class="chk"><input type="checkbox" id="r_lang" ${d.req.lang ? "checked" : ""}> Гадаад хэл</label>
     <label class="chk"><input type="checkbox" id="r_adult" ${d.req.adult ? "checked" : ""}> 18+</label>
   </div>
+  ${isAdmin ? `<div class="grid2"><label class="f">Ажлын байрны координат ${BETA}<input id="d_geo" type="text" value="${esc(d.geo || "")}" placeholder="47.9184, 106.9177 (Google Maps-аас)"></label><label class="f">Ирцийн радиус (м)<input id="d_radius" type="number" min="50" max="2000" value="${d.radius || 300}"></label></div><p class="small muted" style="margin-top:-6px">Бөглөвөл оюутан зөвхөн энэ цэгээс заасан радиус дотор байж ирцээ бүртгэнэ. Google Maps дээр байршил дээр удаан дарж координатыг хуулна. Хоосон бол шалгахгүй.</p>` : ""}
   ${isAdmin ? "" : `<label class="f">Нэмэлт тайлбар<textarea id="d_note" rows="3" placeholder="Хувцас, хариуцагч, бусад">${esc(d.note || "")}</textarea></label>`}
   <div class="card" style="background:var(--sunk)"><h3>Хуулийн шалгалт</h3><div class="checks" id="checks"></div></div>
   <div class="row"><button class="btn primary" data-a="${isAdmin ? "publishOrder" : "sendRequest"}" id="pubBtn">${isAdmin ? "Захиалга бүртгэх" : "Хүсэлт илгээх"}</button><span class="small muted" id="pubNote"></span></div>
@@ -396,7 +412,7 @@ function renderChecks() {
 }
 function readDraft() {
   const d = draft || reqDraft; if (!d) return;
-  ["clientId", "letterNo", "letterDate", "cat", "title", "place", "area", "date", "to", "start", "end", "need", "rate", "transport", "note"].forEach(k => { const el = $("#d_" + k); if (el) d[k] = el.value; });
+  ["clientId", "letterNo", "letterDate", "cat", "title", "place", "area", "date", "to", "start", "end", "need", "rate", "transport", "note", "geo", "radius"].forEach(k => { const el = $("#d_" + k); if (el) d[k] = el.value; });
   ["health", "license", "lang", "adult"].forEach(k => { const el = $("#r_" + k); if (el) d.req[k] = el.checked; });
   const m = $("#d_multi"); if (m) d.multi = m.checked;
   if (d.cat && CATS[d.cat]) { const r = CATS[d.cat].req; ["health", "license", "lang"].forEach(k => { if (r[k]) { d.req[k] = true; const el = $("#r_" + k); if (el) el.checked = true; } }); }
@@ -418,6 +434,7 @@ function projDetail(P) {
     <div class="facts"><span>Хугацаа: <b>${fmtDate(P.from)} – ${fmtDate(P.to)}</b></span><span>Ээлж: <b class="num">${P.start}–${P.end}</b> (${hours(P)} цаг)</span><span>Өдөрт: <b>${P.need} хүн</b></span><span>Хөлс: <b class="num">${money(P.rate)}/цаг</b></span><span>Байр: <b>${esc(P.place)}</b></span><span>Албан бичиг: <b>№${esc(P.letterNo)}</b></span></div>
     <div class="row">${reqTags(P)}</div>
     ${contractRow(u)}
+    ${geoBox(P)}
     <div class="kpis"><div class="kpi"><b class="num">${v.doneDays}/${ds.length}</b><span>Дууссан өдөр</span></div><div class="kpi"><b class="num">${v.present}</b><span>Гүйцэтгэсэн хүн-өдөр</span></div><div class="kpi"><b class="num">${money(v.total)}</b><span>Гүйцэтгэлийн дүн</span></div><div class="kpi"><b class="num">${money(v.due)}</b><span>Төлөх үлдэгдэл</span></div></div>
     <div class="row"><button class="btn sun" data-a="selectProj" data-v="${P.id}" ${!pending || P.contract.status !== "signed" ? "disabled" : ""}>Нээлттэй бүх өдрийг оноогоор бөглөх${pending ? ` (${pending} бүртгэл)` : ""}</button><button class="btn" data-a="openDoc" data-v="${P.id}">Гэрээ, нэхэмжлэх</button></div>
     <p class="small muted">Сонгогдсон хүн бүрт сонгогдсон өдрүүдийнх нь жагсаалттай нэг мессеж очно. Нэг хүн долоо хоногт ${S.settings.weekHours || 32} цагаас хэтрэхгүй.</p>
@@ -434,7 +451,7 @@ function orderDetail(o) {
     <div class="row between"><div><span class="muted small">${esc(c.name)} · ${o.no}</span><h1>${esc(o.title)}</h1></div>${done ? '<span class="pill p-grey">Дууссан</span>' : `<span class="pill ${sel >= o.need ? "p-ok" : "p-blue"}">${sel}/${o.need} хүн</span>`}</div>
     <div class="facts"><span>Огноо: <b>${dayLabel(o.date)}, ${o.start}–${o.end}</b></span><span>Байр: <b>${esc(o.place)}</b></span><span>Хөлс: <b class="num">${money(o.rate)}/цаг</b></span>${lateEnd(o) ? `<span>Тээвэр: <b>${TRANSPORT[o.transport]}</b></span>` : ""}</div>
     <div class="row">${reqTags(o)}</div>
-    ${single ? contractRow(u) : ""}
+    ${single ? contractRow(u) + geoBox(P_(o.proj)) : ""}
     ${!done ? `<div class="row"><button class="btn sun" data-a="selectOne" data-v="${o.id}" ${sel >= o.need || !signed(o) ? "disabled" : ""}>Оноогоор автоматаар сонгох</button><button class="btn" data-a="markDone" data-v="${o.id}" ${o.date > TODAY ? "disabled" : ""}>Ажил дууссан гэж тэмдэглэх</button>${single ? `<button class="btn" data-a="openDoc" data-v="${o.proj}">Гэрээ, нэхэмжлэх</button>` : ""}</div>` : `<div class="row"><button class="btn sm" data-a="reopen" data-v="${o.id}">Дахин нээх</button></div>`}
   </section>
   <section class="card"><h2>Бүртгүүлсэн хүмүүс (оноогоор)</h2>
@@ -442,18 +459,25 @@ function orderDetail(o) {
     <td><b>${esc(name(w))}</b>${sc.isNew ? ' <span class="pill p-sun">Шинэ</span>' : ""}<div class="muted small">${esc(w.school)} · ${w.age} нас · <a href="tel:${esc(w.phone)}">${esc(w.phone)}</a></div></td>
     <td><div class="row" style="gap:8px;flex-wrap:nowrap"><b class="num">${sc.total}</b>${bar(sc.total)}</div></td>
     <td>${done && a.st === "confirmed" ? '<span class="small muted">—</span>' : bl.length && !active(a) ? bl.map(b => `<div class="small" style="color:var(--bad)">${esc(b)}</div>`).join("") : '<span class="small" style="color:var(--ok)">Бүх шаардлага хангасан</span>'}</td>
-    <td>${pill(a.st)}</td>
-    ${done || o.date === TODAY ? `<td class="num small">${at && at.noshow ? '<span class="pill p-bad">Ирээгүй</span>' : at ? `${at.in || "—"} → ${at.out || "—"}` : "—"}</td>` : ""}
+    <td>${pill(a.st)}${a.leave ? `<div class="small" style="margin-top:4px">${a.leave.st === "pending" ? `<span class="pill p-warn">Чөлөө хүссэн</span><div class="muted">${esc(a.leave.reason)}</div><div class="row" style="gap:4px;margin-top:4px"><button class="btn sm primary" data-a="leaveOk" data-v="${o.id}|${w.id}">Зөвшөөрөх</button><button class="btn sm" data-a="leaveNo" data-v="${o.id}|${w.id}">Татгалзах</button></div>` : a.leave.st === "approved" ? '<span class="muted">Чөлөө зөвшөөрсөн</span>' : '<span class="muted">Чөлөө татгалзсан</span>'}</div>` : ""}</td>
+    ${done || o.date === TODAY ? `<td class="num small">${at && at.noshow ? '<span class="pill p-bad">Ирээгүй</span>' : at ? `${at.in || "—"} → ${at.out || "—"}${at.inDist !== "" && at.inDist != null ? `<div class="muted">📍 ${at.inDist} м</div>` : ""}` : "—"}</td>` : ""}
     ${done ? `<td>${at && at.out ? rateSel(o.id, w.id, at.rated) : "—"}</td>` : `<td>${a.st === "applied" || a.st === "waitlist" ? `<button class="btn sm" data-a="manualSel" data-v="${o.id}|${w.id}" ${bl.length || sel >= o.need || !signed(o) ? "disabled" : ""}>Сонгох</button>` : active(a) && !(at && at.in) ? `<button class="btn sm danger" data-a="unsel" data-v="${o.id}|${w.id}">Хасах</button>` : ""}</td>`}
   </tr>`; }).join("")}</tbody></table></div>` : '<p class="muted">Одоогоор бүртгүүлсэн хүн алга.</p>'}
   </section>`;
+}
+function geoBox(P) {
+  const has = P.lat !== null && P.lat !== undefined && !isNaN(P.lat);
+  return `<details class="card" style="background:var(--sunk);gap:8px" ${has ? "" : "open"}><summary>Ирцийн байршил ${BETA} ${has ? `<span class="pill p-ok">${P.radius} м</span>` : '<span class="pill p-grey">Тохируулаагүй</span>'}</summary>
+    <div class="grid2" style="margin-top:8px"><label class="f">Координат (Google Maps-аас)<input id="geo_${P.id}" type="text" value="${has ? P.lat + ", " + P.lng : ""}" placeholder="47.9184, 106.9177"></label><label class="f">Радиус (м)<input id="rad_${P.id}" type="number" min="50" max="2000" value="${P.radius || 300}"></label></div>
+    <div class="row"><button class="btn sm primary" data-a="saveGeo" data-v="${P.id}">Хадгалах</button>${has ? `<a class="btn sm" target="_blank" rel="noopener" href="https://maps.google.com/?q=${P.lat},${P.lng}">Газрын зураг</a><button class="btn sm" data-a="clearGeo" data-v="${P.id}">Унтраах</button>` : ""}</div>
+    <p class="small muted">Тохируулбал оюутан QR/кодоор бүртгүүлэхдээ утасныхаа байршлыг илгээж, энэ радиус дотор байх ёстой. Барилга дотор GPS 50–100 м алдаатай байж болно.</p></details>`;
 }
 function rateSel(oid, wid, v) { return `<select data-rate="${oid}|${wid}" aria-label="Үнэлгээ" style="width:auto">${["", 1, 2, 3, 4, 5].map(n => `<option value="${n}" ${n == v ? "selected" : ""}>${n ? "★".repeat(n) : "Үнэлэх"}</option>`).join("")}</select>`; }
 
 function aWorkers() {
   const q = (V.wq || "").toLowerCase();
   const list = S.workers.filter(w => !q || (w.last + " " + w.first + " " + w.phone + " " + w.school).toLowerCase().includes(q)).map(w => ({ w, sc: score(w) })).sort((a, b) => b.sc.total - a.sc.total);
-  return `<div class="row between"><h1>Ажилчид</h1><input id="wq" type="text" placeholder="Нэр, утас, сургуулиар хайх" value="${esc(V.wq || "")}" style="max-width:260px"></div>
+  return `<div class="row between"><h1>Ажилчид</h1><div class="row"><input id="wq" type="text" placeholder="Нэр, утас, сургуулиар хайх" value="${esc(V.wq || "")}" style="max-width:260px"><button class="btn sm" data-a="csvWorkers">CSV татах</button></div></div>
   <section class="card"><p class="small muted">Оноо = үнэлгээ ${W.rating}% · ирц ${W.attend}% · сургалтын тест ${W.test}% · туршлага ${W.exp}% · хариу өгөх хурд ${W.resp}%. Шинэ хүнд эхлэлийн дундаж оноо өгнө. Оюутнууд index.html-ээр өөрсдөө бүртгүүлнэ.</p>
   ${list.length ? `<div class="tbl"><table><thead><tr><th>Нэр</th><th>Оноо</th><th class="r">Ээлж</th><th class="r">Үнэлгээ</th><th>Сул цаг</th><th>Бичиг баримт</th><th></th></tr></thead><tbody>${list.map(({ w, sc }) => {
     const hd = w.health ? daysBetween(TODAY, w.health) : null;
@@ -613,7 +637,7 @@ function aPayouts() {
   const paid = [];
   S.orders.forEach(o => Object.entries(o.att).forEach(([wid, at]) => { if (at.paidAt) paid.push({ o, w: W_(wid), at }); }));
   paid.sort((a, b) => b.at.paidAt - a.at.paidAt);
-  return `<h1>Цалин олголт</h1>
+  return `<div class="row between"><h1>Цалин олголт</h1><button class="btn sm" data-a="csvPay">Бүх ээлжийн CSV ${BETA}</button></div>
   <p class="small muted">Ээлж бүрийн цалинг ${S.settings.payoutDays} хоногийн дотор олгоно. Шилжүүлсний дараа "Олгосон" гэж тэмдэглэхэд оюутны "Цалин" хэсэгт харагдана. Суутгал: НДШ ${S.settings.ndsh}%, ХХОАТ ${S.settings.pit}%.</p>
   <div class="kpis"><div class="kpi"><b class="num">${money(rows.reduce((s, r) => s + pay(r.o).net, 0))}</b><span>Олгох нийт (гарт)</span></div><div class="kpi"><b class="num">${rows.filter(r => r.due).length}</b><span>Хугацаа болсон ээлж</span></div></div>
   ${ppl.length ? ppl.map(p => `<section class="card" style="gap:8px"><div class="row between"><div><h3>${esc(p.w.last)} ${esc(p.w.first)}</h3><div class="small muted">${esc(p.w.phone)} · ${p.rs.length} ээлж</div></div><div class="row"><b class="num">${money(p.net)}</b><button class="btn sm primary" data-a="payout" data-v="${p.rs.map(r => r.key).join(",")}">Бүгдийг олгосон</button></div></div>
@@ -638,6 +662,7 @@ function aSettings() {
   <label class="f">Дараагийнх мөрдөх огноо<input id="s_minWageFrom" type="date" value="${s.minWageFrom || ""}"></label></div>
   <p class="small muted">Цагийн доод хөлс = сарын доод хэмжээ / 168. Одоо: ${money(minHourly(TODAY))}/цаг.</p>
   <label class="chk"><input id="s_reserveNew" type="checkbox" ${s.reserveNew ? "checked" : ""}> 3+ хүнтэй өдөрт 1 суудлыг шинэ хүнд үлдээх</label>
+  <label class="chk"><input id="s_remind" type="checkbox" ${s.remind !== false ? "checked" : ""}> Ээлжийн өмнөх өдөр болон 2 цагийн өмнө оюутанд сануулах ${BETA}</label>
   <label class="chk"><input id="s_notifyStudents" type="checkbox" ${s.notifyStudents ? "checked" : ""}> Сонгогдсон оюутанд имэйлээр мэдэгдэх (имэйлтэй бол; өдөрт ~100 имэйлийн хязгаартай)</label>
   <div class="alert warn">Суутгалын хувь жишээ. Одоо мөрдөж буй хувийг нягтлан бодогчоор шалгуулна.</div>
   <button class="btn primary" data-a="saveSettings">Хадгалах</button></section>
@@ -820,14 +845,16 @@ function sMine(w) {
   const card = o => {
     const a = myA(o); const at = o.att[w.id] || {}; let act = "";
     const overnight = toMin(o.end) <= toMin(o.start) && o.date === addDays(TODAY, -1) && at.in && !at.out;
+    const lv = a.leave;
+    const leaveUi = lv && lv.st === "pending" ? `<div class="alert warn small">Чөлөө хүссэн — STM-ийн хариуг хүлээж байна.</div>` : lv && lv.st === "rejected" ? `<div class="alert bad small">Чөлөөний хүсэлтийг зөвшөөрөөгүй. Ээлждээ ирнэ үү.</div>` : `<button class="btn sm" data-a="leave" data-v="${o.id}" style="justify-self:start">Чөлөө хүсэх</button>`;
     if (a.st === "selected") act = `<div class="row"><button class="cta" data-a="confirm" data-v="${o.id}">Баталгаажуулах</button><button class="btn danger sm" data-a="decline" data-v="${o.id}">Татгалзах</button></div>`;
     else if (at.noshow) act = `<div class="alert bad small">Хариуцагч таныг ирээгүй гэж тэмдэглэсэн. Алдаа гарсан бол STM багт бичнэ үү.</div>`;
     else if (a.st === "confirmed" && o.status !== "done" && (o.date === TODAY || overnight)) {
-      if (!at.in) act = `<button class="cta" data-a="checkIn" data-v="${o.id}" style="justify-self:start">Ирлээ</button>`;
+      if (!at.in) act = `<button class="cta" data-a="checkIn" data-v="${o.id}" style="justify-self:start">Ирлээ</button>` + leaveUi;
       else if (!at.out) act = `<div class="small">Ирсэн: <b class="num">${at.in}</b></div><button class="cta" data-a="checkOut" data-v="${o.id}" style="justify-self:start">Явлаа</button>`;
       else act = payBox(o, at);
       act += `<button class="btn sm danger" data-a="sos" data-v="${o.id}" style="justify-self:start">Яаралтай тусламж</button>`;
-    } else if (a.st === "confirmed" && o.date > TODAY) act = `<div class="small muted">Ажлын өдөр хариуцагчийн QR / кодоор ирцээ бүртгүүлнэ.</div><button class="btn sm" data-a="decline" data-v="${o.id}" style="justify-self:start">Татгалзах</button>`;
+    } else if (a.st === "confirmed" && o.date > TODAY) act = `<div class="small muted">Ажлын өдөр хариуцагчийн QR / кодоор ирцээ бүртгүүлнэ.${o.geo ? " Ирэхдээ утасныхаа байршлыг асаана." : ""}</div>` + leaveUi;
     else if (a.st === "applied" || a.st === "waitlist") act = `<div class="small muted">${a.st === "applied" ? "Сонголт хийгдэхийг хүлээж байна. Сонгогдвол мессеж ирнэ." : "Хүлээлгийн жагсаалтад байна. Суудал гарвал мессеж ирнэ."}</div><button class="btn sm" data-a="decline" data-v="${o.id}" style="justify-self:start">Бүртгэлээ цуцлах</button>`;
     if (at.out && lateEnd(o)) act += at.home ? '<div class="alert ok small">Гэртээ хүрснээ мэдэгдсэн.</div>' : `<button class="cta" data-a="home" data-v="${o.id}" style="justify-self:start">Гэртээ хүрлээ</button>`;
     return `<article class="job" ${o.date === TODAY ? 'style="border-color:var(--sun)"' : ""}><div class="row between">${pill(a.st)}<span class="muted small">${o.date === TODAY ? "<b>Өнөөдөр</b>" : dayLabel(o.date)}</span></div><div><h3>${esc(o.title)}</h3><div class="muted small">${esc(alias(o.clientId))} · ${esc(placeFor(o, w))} · <span class="num">${o.start}–${o.end}</span></div></div>${act}</article>`;
@@ -921,6 +948,7 @@ function attend(oid, kind) {
   const o = O_(oid);
   modal(`<h2>${kind === "in" ? "Ирц бүртгэх" : "Явах бүртгэл"}</h2><p class="small muted">${esc(placeFor(o, W_(S.me)))}</p>
   <div class="scan">${icons.qr}</div>
+  ${o.geo ? `<div class="alert info small">📍 Энэ ажлын байранд ирцийг байршлаар шалгадаг ${BETA}. Утас байршил асуувал "Allow" дарна уу.</div>` : ""}
   <p class="small">Хариуцагчийн утсан дээрх <b>QR кодыг утасныхаа камераар</b> уншуулахад энэ апп нээгдэж ирц автоматаар бүртгэгдэнэ.</p>
   <form class="stack" data-form="codeIn" data-v="${oid}" style="gap:8px"><label class="f">Эсвэл 6 оронтой код<input id="codeIn" type="text" inputmode="numeric" maxlength="7" placeholder="000 000" autocomplete="off" style="font-size:1.3rem;letter-spacing:.15em;text-align:center"></label><div id="codeErr" class="small" style="color:var(--bad)"></div><button class="btn primary" type="submit">Бүртгэх</button></form>
   <button class="btn sm" data-a="closeModal" style="justify-self:start">Болих</button>`);
@@ -945,7 +973,9 @@ async function handlePendingAtt() {
 }
 async function submitAtt(oid, code) {
   try {
-    const r = await call("sCheck", { id: oid, code }, r => r.kind === "in" ? `Ирц бүртгэгдлээ: ${r.time}` : `Ээлж дууслаа (${r.time}). Цалингийн тооцоо гарлаа`);
+    const o = O_(oid); let pos = null;
+    if (o && o.geo) { setBusy(1); pos = await getPos(); setBusy(-1); }
+    const r = await call("sCheck", Object.assign({ id: oid, code }, pos || {}), r => r.kind === "in" ? `Ирц бүртгэгдлээ: ${r.time}` : `Ээлж дууслаа (${r.time}). Цалингийн тооцоо гарлаа`);
     if (r) { closeModal(); V.sview = "mine"; render(); }
   } catch (e) { const el = $("#codeErr"); if (el) el.textContent = e.message; }
 }
@@ -991,6 +1021,17 @@ const act = {
   reopen: v => call("aReopen", { id: v }, "Дахин нээлээ").catch(() => {}),
   sendContract: v => call("aSendContract", { id: v }, r => r.mailed ? `Гэрээ ${(C_(P_(v).clientId) || {}).email} руу илгээгдлээ` : "Гэрээ илгээсэн төлөвт орлоо (имэйл явуулж чадсангүй — захиалагчид линкээ өөрөө өгнө үү)").catch(() => {}),
   markPaid: v => call("aMarkPaid", { id: v }, "Төлбөр бүртгэгдлээ").catch(() => {}),
+  leaveOk: v => { const [id, wid] = v.split("|"); return call("aLeave", { id, wid, approve: true }, r => "Чөлөө зөвшөөрлөө" + (r.promoted ? `. ${r.promoted} дараагийнхаар сонгогдлоо` : "")).catch(() => {}); },
+  leaveNo: v => { const [id, wid] = v.split("|"); return call("aLeave", { id, wid, approve: false }, "Татгалзлаа. Оюутанд мэдэгдлээ").catch(() => {}); },
+  saveGeo: v => {
+    const t = val("geo_" + v), m = t.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+    if (!m) { toast('Координатыг "47.9184, 106.9177" хэлбэрээр оруулна уу', true); return "skip"; }
+    return call("aProjectGeo", { id: v, lat: m[1], lng: m[2], radius: +val("rad_" + v) || 300 }, "Байршил хадгалагдлаа").catch(() => {});
+  },
+  clearGeo: v => call("aProjectGeo", { id: v, lat: "", lng: "", radius: 300 }, "Байршлын шалгалтыг унтраалаа").catch(() => {}),
+  csvWorkers: () => { downloadCSV("STM-ajilchid-" + TODAY + ".csv", ["Овог", "Нэр", "Утас", "Имэйл", "Төрсөн", "Нас", "Сургууль", "Мэргэжил", "Сул өдөр", "Сул цаг", "Цагаан хуудас", "Жолоо", "Гадаад хэл", "Ээлж", "Тасалсан", "Хоцорсон", "Үнэлгээ", "Оноо", "Төлөв", "Бүртгүүлсэн"], S.workers.map(w => [w.last, w.first, w.phone, w.email, w.birth, w.age, w.school, w.major, w.days.map(d => DAYS[d]).join(" "), w.shifts.map(s => SHIFTS[s]).join(" "), w.health, w.license ? "Тийм" : "", w.lang, w.done, w.noshow, w.late, w.rn ? w.rating.toFixed(1) : "", score(w).total, w.status === "blocked" ? "Хаагдсан" : "Идэвхтэй", fmtTs(w.createdAt)])); return "skip"; },
+  csvPay: () => { const rows = []; S.orders.forEach(o => Object.entries(o.att).forEach(([wid, at]) => { if (!at.out) return; const w = W_(wid), p = pay(o); rows.push([o.date, o.no, cname(o.clientId), o.title, w ? w.last : "", w ? w.first : "", w ? w.phone : "", at.in, at.out, p.h, o.rate, Math.round(p.gross), Math.round(p.ndsh), Math.round(p.pit), Math.round(p.net), payDate(o), at.paidAt ? fmtTs(at.paidAt) : ""]); })); rows.sort((a, b) => a[0] < b[0] ? -1 : 1); downloadCSV("STM-tsalin-" + TODAY + ".csv", ["Огноо", "Дугаар", "Захиалагч", "Ажил", "Овог", "Нэр", "Утас", "Ирсэн", "Явсан", "Цаг", "Цагийн хөлс", "Нийт", "НДШ", "ХХОАТ", "Гарт", "Олгох өдөр", "Олгосон"], rows); return "skip"; },
+  csvAtt: v => { const u = unit(v), rows = []; u.orders.forEach(o => o.apps.forEach(a => { const w = W_(a.wid), at = o.att[a.wid] || {}; rows.push([o.date, w ? w.last + " " + w.first : a.wid, w ? w.phone : "", (ST[a.st] || [a.st])[0], at.in || "", at.out || "", at.noshow ? "Ирээгүй" : "", at.inDist != null ? at.inDist : "", at.rated || "", a.leave ? a.leave.st + ": " + a.leave.reason : ""]); })); downloadCSV("STM-irts-" + u.no + ".csv", ["Огноо", "Оюутан", "Утас", "Төлөв", "Ирсэн", "Явсан", "Ирээгүй", "Зай (м)", "Үнэлгээ", "Чөлөө"], rows); return "skip"; },
   resolve: v => call("aResolve", { id: v }, "Шийдсэн гэж тэмдэглэлээ").catch(() => {}),
   payout: v => call("aPayout", { ids: v.split(",") }, r => `${r.n} ээлжийн цалин олгосон гэж тэмдэглэлээ`).catch(() => {}),
   chatTo: v => { V.aview = "chat"; V.chatWith = v; if (S.msgs.some(m => m.w === v && m.from !== "admin" && !m.readA)) return call("aRead", { wid: v }).catch(() => {}); },
@@ -1016,7 +1057,7 @@ const act = {
     return call("aSaveTraining", { cid: V.trainClient, training: { title: e.title, video: e.video, mins: e.mins, pass: e.pass, steps: e.steps, qs } }, "Сургалт хадгалагдлаа").then(r => { if (r) { V.editTrain = null; render(); } }).catch(() => {});
   },
   delTrain: () => { ask("Сургалтыг устгах уу? Оюутнууд тестгүйгээр бүртгүүлэх болно.", "Устгах", () => call("aDeleteTraining", { cid: V.trainClient }, "Устгалаа").then(() => { V.editTrain = null; render(); }).catch(() => {}), true); return "skip"; },
-  saveSettings: () => call("aSaveSettings", { settings: { fee: +val("s_fee"), vat: checked("s_vat"), ndsh: +val("s_ndsh"), pit: +val("s_pit"), payoutDays: +val("s_payoutDays"), weekHours: +val("s_weekHours"), minWage: +val("s_minWage"), minWageNext: +val("s_minWageNext") || "", minWageFrom: val("s_minWageFrom"), reserveNew: checked("s_reserveNew"), notifyStudents: checked("s_notifyStudents") } }, "Хадгаллаа").catch(() => {}),
+  saveSettings: () => call("aSaveSettings", { settings: { fee: +val("s_fee"), vat: checked("s_vat"), ndsh: +val("s_ndsh"), pit: +val("s_pit"), payoutDays: +val("s_payoutDays"), weekHours: +val("s_weekHours"), minWage: +val("s_minWage"), minWageNext: +val("s_minWageNext") || "", minWageFrom: val("s_minWageFrom"), reserveNew: checked("s_reserveNew"), notifyStudents: checked("s_notifyStudents"), remind: checked("s_remind") } }, "Хадгаллаа").catch(() => {}),
   saveConfig: () => { setBusy(1); return api("saveConfig", { token: TOKEN, config: { notify: checked("cfg_notify"), notifyEmail: val("cfg_email") } }).then(r => { adminCfg = r.config; render(); toast("Хадгаллаа"); }).catch(e => toast(e.message, true)).finally(() => setBusy(-1)); },
   addAdmin: () => { setBusy(1); return api("addAdmin", { token: TOKEN, name: val("na_name"), password: val("na_pw") }).then(r => { adminCfg.admins = r.admins; render(); toast("Админ нэмлээ"); }).catch(e => toast(e.message, true)).finally(() => setBusy(-1)); },
   removeAdmin: v => { ask(v + " админыг хасах уу?", "Хасах", () => { setBusy(1); return api("removeAdmin", { token: TOKEN, name: v }).then(r => { adminCfg.admins = r.admins; render(); toast("Хаслаа"); }).catch(e => toast(e.message, true)).finally(() => setBusy(-1)); }, true); return "skip"; },
@@ -1041,6 +1082,8 @@ const act = {
   startLearn: v => { quiz = { wid: S.me, cid: v, step: "watch", watched: false }; },
   toTest: () => { const t = S.trainings[quiz.cid]; quiz.step = "test"; quiz.left = t.qs.length * 60; quiz.order = shuffle(t.qs.map((_, i) => i)); quiz.opt = {}; t.qs.forEach((q, i) => quiz.opt[i] = shuffle(q.o.map((_, j) => j))); setTimeout(startTimer, 0); },
   quitQuiz: () => { quiz = null; clearInterval(timerI); },
+  leave: v => { const o = O_(v); modal(`<h2>Чөлөө хүсэх</h2><p class="small">${esc(o.title)} · ${dayLabel(o.date)} ${o.start}–${o.end}</p><label class="f">Шалтгаан<textarea id="lv_reason" rows="3" maxlength="300" placeholder="Жишээ: шалгалт давхацсан"></textarea></label><p class="small muted">STM зөвшөөрвөл суудал хүлээлгийн дараагийн хүнд шилжинэ. Зөвшөөрөгдөх хүртэл ээлж тань хэвээр.</p><div class="row"><button class="btn primary" data-a="leaveGo" data-v="${v}">Илгээх</button><button class="btn" data-a="closeModal">Болих</button></div>`); return "skip"; },
+  leaveGo: v => { const reason = val("lv_reason"); if (!reason) { toast("Шалтгаанаа бичнэ үү", true); return "skip"; } closeModal(); return call("sLeave", { id: v, reason }, "Хүсэлт илгээгдлээ. Хариуг мессежээр мэдэгдэнэ").catch(() => {}); },
   confirm: v => call("sConfirm", { ids: [v] }, "Баталгаажлаа").catch(() => {}),
   confirmAll: () => call("sConfirm", { ids: [] }, r => `${r.n} өдөр баталгаажлаа`).catch(() => {}),
   decline: v => { ask("Энэ ээлжээс татгалзах уу?", "Татгалзах", () => call("sDecline", { id: v }, r => "Татгалзлаа" + (r.promoted ? ". Суудал дараагийн хүнд шилжлээ" : "")).catch(() => {}), true); return "skip"; },

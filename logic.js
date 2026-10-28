@@ -28,7 +28,7 @@ var CATS = {
 var TRANSPORT = { "": "Сонгоогүй", client: "Захиалагч хүргэнэ", taxi: "Таксины зардал олгоно", early: "Ээлжийг 21:00-д дуусгана" };
 var W = { rating: 35, attend: 25, test: 15, exp: 15, resp: 10 };
 var ST = { applied: ["Бүртгүүлсэн", "p-blue"], selected: ["Сонгогдсон", "p-sun"], confirmed: ["Баталгаажсан", "p-ok"], waitlist: ["Хүлээлгэд", "p-grey"], declined: ["Татгалзсан", "p-bad"] };
-var DEFAULT_SETTINGS = { fee: 15, vat: true, ndsh: 11.5, pit: 10, reserveNew: true, payoutDays: 7, minWage: 792000, minWageNext: 1000000, minWageFrom: "2027-01-01", weekHours: 32, notifyStudents: true };
+var DEFAULT_SETTINGS = { fee: 15, vat: true, ndsh: 11.5, pit: 10, reserveNew: true, payoutDays: 7, minWage: 792000, minWageNext: 1000000, minWageFrom: "2027-01-01", weekHours: 32, notifyStudents: true, remind: true };
 
 /* ---------- огноо ---------- */
 function toMin(t) { var p = String(t || "0:0").split(":"); return (+p[0]) * 60 + (+p[1] || 0); }
