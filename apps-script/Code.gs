@@ -1627,7 +1627,7 @@ function out_(o) {
 // Нэг удаагийн тохиргоо: script.google.com/home/usersettings → "Google Apps Script API" асаалттай,
 // appsscript.json-д script.projects, script.deployments, script.external_request эрх.
 const GH_REPO = 'Binzo9/tsagiin-ajil';
-const SELF_VER = 3;
+const SELF_VER = 4;
 const WEB_ID = 'AKfycbwUypzNEwXU56GAWrZeMJe0YJGGen6vdkGsNBi5n4J4GGEDPSCBnO3RpxQZZ4IX_XR3'; // config.js-ийн /exec хаягийн ID
 
 function ghFile_(path, ref) {
