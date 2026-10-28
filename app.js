@@ -96,7 +96,7 @@ function downloadCSV(fname, header, rows) {
 function getPos() {
   return new Promise(res => {
     if (!navigator.geolocation) return res(null);
-    navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) }), () => res(null), { timeout: 10000, enableHighAccuracy: true, maximumAge: 30000 });
+    navigator.geolocation.getCurrentPosition(p => res({ lat: p.coords.latitude.toFixed(6), lng: p.coords.longitude.toFixed(6) }), () => res(null), { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 });
   });
 }
 const icons = {
@@ -415,7 +415,12 @@ function readDraft() {
   ["clientId", "letterNo", "letterDate", "cat", "title", "place", "area", "date", "to", "start", "end", "need", "rate", "transport", "note", "geo", "radius"].forEach(k => { const el = $("#d_" + k); if (el) d[k] = el.value; });
   ["health", "license", "lang", "adult"].forEach(k => { const el = $("#r_" + k); if (el) d.req[k] = el.checked; });
   const m = $("#d_multi"); if (m) d.multi = m.checked;
-  if (d.cat && CATS[d.cat]) { const r = CATS[d.cat].req; ["health", "license", "lang"].forEach(k => { if (r[k]) { d.req[k] = true; const el = $("#r_" + k); if (el) el.checked = true; } }); }
+  // Ангилал солигдох үед тухайн ангиллын шаардлагыг шинээр тавина (өмнөх ангиллынх үлдэхгүй).
+  if (d.cat && CATS[d.cat]) {
+    const r = CATS[d.cat].req, changed = d._cat !== undefined && d._cat !== d.cat;
+    ["health", "license", "lang"].forEach(k => { if (r[k] || changed) { d.req[k] = !!r[k]; const el = $("#r_" + k); if (el) el.checked = !!r[k]; } });
+    d._cat = d.cat;
+  }
 }
 function contractRow(u) {
   const c = u.contract;
@@ -981,6 +986,8 @@ async function submitAtt(oid, code) {
 }
 
 /* ===================== Үйлдлүүд ===================== */
+// CSV татахын өмнө серверээс хамгийн сүүлийн өгөгдлийг авна.
+function freshThen(fn) { return loadState().then(fn); }
 const act = {
   // ерөнхий
   refresh: () => { adminCfg = null; return loadState(); },
@@ -1029,9 +1036,9 @@ const act = {
     return call("aProjectGeo", { id: v, lat: m[1], lng: m[2], radius: +val("rad_" + v) || 300 }, "Байршил хадгалагдлаа").catch(() => {});
   },
   clearGeo: v => call("aProjectGeo", { id: v, lat: "", lng: "", radius: 300 }, "Байршлын шалгалтыг унтраалаа").catch(() => {}),
-  csvWorkers: () => { downloadCSV("STM-ajilchid-" + TODAY + ".csv", ["Овог", "Нэр", "Утас", "Имэйл", "Төрсөн", "Нас", "Сургууль", "Мэргэжил", "Сул өдөр", "Сул цаг", "Цагаан хуудас", "Жолоо", "Гадаад хэл", "Ээлж", "Тасалсан", "Хоцорсон", "Үнэлгээ", "Оноо", "Төлөв", "Бүртгүүлсэн"], S.workers.map(w => [w.last, w.first, w.phone, w.email, w.birth, w.age, w.school, w.major, w.days.map(d => DAYS[d]).join(" "), w.shifts.map(s => SHIFTS[s]).join(" "), w.health, w.license ? "Тийм" : "", w.lang, w.done, w.noshow, w.late, w.rn ? w.rating.toFixed(1) : "", score(w).total, w.status === "blocked" ? "Хаагдсан" : "Идэвхтэй", fmtTs(w.createdAt)])); return "skip"; },
-  csvPay: () => { const rows = []; S.orders.forEach(o => Object.entries(o.att).forEach(([wid, at]) => { if (!at.out) return; const w = W_(wid), p = pay(o); rows.push([o.date, o.no, cname(o.clientId), o.title, w ? w.last : "", w ? w.first : "", w ? w.phone : "", at.in, at.out, p.h, o.rate, Math.round(p.gross), Math.round(p.ndsh), Math.round(p.pit), Math.round(p.net), payDate(o), at.paidAt ? fmtTs(at.paidAt) : ""]); })); rows.sort((a, b) => a[0] < b[0] ? -1 : 1); downloadCSV("STM-tsalin-" + TODAY + ".csv", ["Огноо", "Дугаар", "Захиалагч", "Ажил", "Овог", "Нэр", "Утас", "Ирсэн", "Явсан", "Цаг", "Цагийн хөлс", "Нийт", "НДШ", "ХХОАТ", "Гарт", "Олгох өдөр", "Олгосон"], rows); return "skip"; },
-  csvAtt: v => { const u = unit(v), rows = []; u.orders.forEach(o => o.apps.forEach(a => { const w = W_(a.wid), at = o.att[a.wid] || {}; rows.push([o.date, w ? w.last + " " + w.first : a.wid, w ? w.phone : "", (ST[a.st] || [a.st])[0], at.in || "", at.out || "", at.noshow ? "Ирээгүй" : "", at.inDist != null ? at.inDist : "", at.rated || "", a.leave ? a.leave.st + ": " + a.leave.reason : ""]); })); downloadCSV("STM-irts-" + u.no + ".csv", ["Огноо", "Оюутан", "Утас", "Төлөв", "Ирсэн", "Явсан", "Ирээгүй", "Зай (м)", "Үнэлгээ", "Чөлөө"], rows); return "skip"; },
+  csvWorkers: () => freshThen(() => downloadCSV("STM-ajilchid-" + TODAY + ".csv", ["Овог", "Нэр", "Утас", "Имэйл", "Төрсөн", "Нас", "Сургууль", "Мэргэжил", "Сул өдөр", "Сул цаг", "Цагаан хуудас", "Жолоо", "Гадаад хэл", "Ээлж", "Тасалсан", "Хоцорсон", "Үнэлгээ", "Оноо", "Төлөв", "Бүртгүүлсэн"], S.workers.map(w => [w.last, w.first, w.phone, w.email, w.birth, w.age, w.school, w.major, w.days.map(d => DAYS[d]).join(" "), w.shifts.map(s => SHIFTS[s]).join(" "), w.health, w.license ? "Тийм" : "", w.lang, w.done, w.noshow, w.late, w.rn ? w.rating.toFixed(1) : "", score(w).total, w.status === "blocked" ? "Хаагдсан" : "Идэвхтэй", fmtTs(w.createdAt)]))),
+  csvPay: () => freshThen(() => { const rows = []; S.orders.forEach(o => Object.entries(o.att).forEach(([wid, at]) => { if (!at.out) return; const w = W_(wid), p = pay(o); rows.push([o.date, o.no, cname(o.clientId), o.title, w ? w.last : "", w ? w.first : "", w ? w.phone : "", at.in, at.out, p.h, o.rate, Math.round(p.gross), Math.round(p.ndsh), Math.round(p.pit), Math.round(p.net), payDate(o), at.paidAt ? fmtTs(at.paidAt) : ""]); })); rows.sort((a, b) => a[0] < b[0] ? -1 : 1); downloadCSV("STM-tsalin-" + TODAY + ".csv", ["Огноо", "Дугаар", "Захиалагч", "Ажил", "Овог", "Нэр", "Утас", "Ирсэн", "Явсан", "Цаг", "Цагийн хөлс", "Нийт", "НДШ", "ХХОАТ", "Гарт", "Олгох өдөр", "Олгосон"], rows); }),
+  csvAtt: v => freshThen(() => { const u = unit(v), rows = []; u.orders.forEach(o => o.apps.forEach(a => { const w = W_(a.wid), at = o.att[a.wid] || {}; rows.push([o.date, w ? w.last + " " + w.first : a.wid, w ? w.phone : "", (ST[a.st] || [a.st])[0], at.in || "", at.out || "", at.noshow ? "Ирээгүй" : "", at.inDist != null ? at.inDist : "", at.rated || "", a.leave ? a.leave.st + ": " + a.leave.reason : ""]); })); downloadCSV("STM-irts-" + u.no + ".csv", ["Огноо", "Оюутан", "Утас", "Төлөв", "Ирсэн", "Явсан", "Ирээгүй", "Зай (м)", "Үнэлгээ", "Чөлөө"], rows); }),
   resolve: v => call("aResolve", { id: v }, "Шийдсэн гэж тэмдэглэлээ").catch(() => {}),
   payout: v => call("aPayout", { ids: v.split(",") }, r => `${r.n} ээлжийн цалин олгосон гэж тэмдэглэлээ`).catch(() => {}),
   chatTo: v => { V.aview = "chat"; V.chatWith = v; if (S.msgs.some(m => m.w === v && m.from !== "admin" && !m.readA)) return call("aRead", { wid: v }).catch(() => {}); },
