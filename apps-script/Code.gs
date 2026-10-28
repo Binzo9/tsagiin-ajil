@@ -1628,7 +1628,7 @@ function out_(o) {
 // appsscript.json-д script.projects, script.deployments, script.external_request эрх.
 const GH_REPO = 'Binzo9/tsagiin-ajil';
 const SELF_VER = 3;
-const WEB_ID = 'AKfycbwkvQ6QrWQ_qBkPtQO09veHU9U-0LpKh-A512D9zj4OL1MUJnEKlSYgBtDM8CVzbeim6w'; // config.js-ийн /exec хаягийн ID
+const WEB_ID = 'AKfycbwUypzNEwXU56GAWrZeMJe0YJGGen6vdkGsNBi5n4J4GGEDPSCBnO3RpxQZZ4IX_XR3'; // config.js-ийн /exec хаягийн ID
 
 function ghFile_(path, ref) {
   const urls = [
