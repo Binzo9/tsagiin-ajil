@@ -45,8 +45,9 @@ const PROJECTS = T_('pr', 'Төслүүд', [
   ['start', 'Эхлэх цаг'], ['end', 'Дуусах цаг'], ['need', 'Өдөрт хүн'], ['rate', 'Цагийн хөлс'], ['req', 'Шаардлага'],
   ['transport', 'Тээвэр'], ['letterNo', 'Албан бичиг №'], ['letterDate', 'Албан бичгийн огноо'],
   ['contractStatus', 'Гэрээ'], ['sentAt', 'Гэрээ илгээсэн'], ['signedAt', 'Гэрээ зурсан'], ['signer', 'Гарын үсэг зурсан'],
-  ['paidUntil', 'Төлсөн (өдөр хүртэл)'], ['requestId', 'Хүсэлтийн id'], ['createdBy', 'Үүсгэсэн админ']
-], { ts: ['createdAt'], day: ['from', 'to', 'letterDate', 'sentAt', 'signedAt', 'paidUntil'], time: ['start', 'end'], num: ['need', 'rate'], json: ['req'] });
+  ['paidUntil', 'Төлсөн (өдөр хүртэл)'], ['requestId', 'Хүсэлтийн id'], ['createdBy', 'Үүсгэсэн админ'],
+  ['lat', 'Өргөрөг'], ['lng', 'Уртраг'], ['radius', 'Ирцийн радиус (м)']
+], { ts: ['createdAt'], day: ['from', 'to', 'letterDate', 'sentAt', 'signedAt', 'paidUntil'], time: ['start', 'end'], num: ['need', 'rate', 'lat', 'lng', 'radius'], json: ['req'] });
 const DAYT = T_('dy', 'Өдрүүд', [
   ['id', 'id'], ['projectId', 'Төслийн id'], ['n', '№'], ['date', 'Огноо'], ['status', 'Төлөв'], ['doneAt', 'Дууссан']
 ], { num: ['n'], day: ['date'], ts: ['doneAt'] });
@@ -54,8 +55,10 @@ const REGS = T_('rg', 'Ээлжийн бүртгэл', [
   ['id', 'id'], ['dayId', 'Өдрийн id'], ['workerId', 'Оюутны id'], ['workerName', 'Оюутан'], ['date', 'Огноо'],
   ['status', 'Төлөв'], ['createdAt', 'Бүртгүүлсэн'], ['selectedAt', 'Сонгогдсон'], ['confirmedAt', 'Баталгаажуулсан'],
   ['checkIn', 'Ирсэн'], ['checkOut', 'Явсан'], ['noshow', 'Ирээгүй'], ['rated', 'Үнэлгээ'], ['home', 'Гэртээ хүрсэн'],
-  ['paidAt', 'Цалин олгосон']
-], { day: ['date'], ts: ['createdAt', 'selectedAt', 'confirmedAt', 'paidAt'], time: ['checkIn', 'checkOut'], bool: ['noshow', 'home'], num: ['rated'] });
+  ['paidAt', 'Цалин олгосон'],
+  ['leaveStatus', 'Чөлөө'], ['leaveReason', 'Чөлөөний шалтгаан'], ['leaveAt', 'Чөлөө хүссэн'],
+  ['inDist', 'Ирэхэд зай (м)'], ['outDist', 'Явахад зай (м)'], ['rem1', 'Сануулга (өмнөх өдөр)'], ['rem2', 'Сануулга (2 цаг)']
+], { day: ['date'], ts: ['createdAt', 'selectedAt', 'confirmedAt', 'paidAt', 'leaveAt', 'rem1', 'rem2'], time: ['checkIn', 'checkOut'], bool: ['noshow', 'home'], num: ['rated'] });
 const TRAININGS = T_('tr', 'Сургалт', [
   ['id', 'Захиалагчийн id'], ['clientName', 'Захиалагч'], ['title', 'Гарчиг'], ['video', 'Видео'], ['mins', 'Минут'],
   ['pass', 'Тэнцэх %'], ['steps', 'Алхмууд'], ['qs', 'Асуултууд'], ['updatedAt', 'Зассан']
@@ -93,7 +96,50 @@ function setup() {
   }
   sign_(0, admins_()[0]);
   MailApp.getRemainingDailyQuota();
+  // Ээлжийн сануулга цаг тутам ажиллана (туршилт).
+  if (!ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'remindShifts')) {
+    ScriptApp.newTrigger('remindShifts').timeBased().everyHours(1).create();
+  }
   Logger.log('Бэлэн. Одоо Deploy → New deployment → Web app хийнэ үү.');
+}
+
+/* ===================== Туршилт: ээлжийн сануулга (цаг тутам) ===================== */
+function remindShifts() {
+  mutate_(c => {
+    if (S.settings.remind === false) return;
+    const tomorrow = addDays(S.today, 1), nowMin = toMin(S.now);
+    let n = 0;
+    S.orders.forEach(o => {
+      if (o.status !== 'open' || !signed(o)) return;
+      o.apps.forEach(a => {
+        if (a.st !== 'confirmed') return;
+        const r = c.regIdx[o.id + '|' + a.wid], w = W_(a.wid);
+        if (!r || !w || r.leaveStatus === 'pending') return;
+        let text = '';
+        if (o.date === tomorrow && !r.rem1 && nowMin >= 12 * 60) {
+          text = 'Сануулга: маргааш (' + dayLabel(o.date) + ') ' + o.start + '–' + o.end + ' "' + o.title + '" ээлжтэй. Хаяг: ' + o.place + '. 15 минутын өмнө ирээрэй.';
+          r.rem1 = Date.now();
+        } else if (o.date === S.today && !r.rem2 && !r.checkIn && toMin(o.start) - nowMin <= 120 && toMin(o.start) - nowMin > 0) {
+          text = 'Сануулга: өнөөдөр ' + o.start + ' цагт "' + o.title + '" ээлж эхэлнэ. Хаяг: ' + o.place + '. Ирэхдээ хариуцагчийн QR-ийг уншуулна.';
+          r.rem2 = Date.now();
+        }
+        if (!text) return;
+        msg_(c, w.id, 'admin', text);
+        if (w.email) mail_(w.email, 'STM сануулга: ' + o.title, text + '\n\n' + siteUrl_() + 'index.html');
+        c.rg.dirty = true;
+        n++;
+      });
+    });
+    if (n) console.log('remindShifts: ' + n);
+  });
+}
+
+// Хоёр цэгийн хоорондох зай, метрээр.
+function distM_(lat1, lng1, lat2, lng2) {
+  const R = 6371000, t = Math.PI / 180;
+  const dLat = (lat2 - lat1) * t, dLng = (lng2 - lng1) * t;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * t) * Math.cos(lat2 * t) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
 }
 
 function hideCols_(t, keys) {
@@ -300,7 +346,8 @@ function state_(c) {
     from: r.from, to: r.to, start: r.start, end: r.end, need: Number(r.need) || 1, rate: Number(r.rate) || 0,
     req: Object.assign({ health: false, adult: false, license: false, lang: false }, r.req || {}), transport: r.transport,
     letterNo: r.letterNo, letterDate: r.letterDate, paidUntil: r.paidUntil, createdAt: r.createdAt, requestId: r.requestId,
-    contract: { status: r.contractStatus || 'draft', sentAt: r.sentAt, signedAt: r.signedAt, signer: r.signer }
+    contract: { status: r.contractStatus || 'draft', sentAt: r.sentAt, signedAt: r.signedAt, signer: r.signer },
+    lat: r.lat === '' ? null : Number(r.lat), lng: r.lng === '' ? null : Number(r.lng), radius: Number(r.radius) || 300
   }));
   const pm = {};
   projects.forEach(p => { pm[p.id] = p; });
@@ -321,9 +368,9 @@ function state_(c) {
     const o = om[r.dayId];
     if (!o) return;
     c.regIdx[o.id + '|' + r.workerId] = r;
-    o.apps.push({ wid: r.workerId, st: r.status || 'applied', selAt: r.selectedAt, confAt: r.confirmedAt });
+    o.apps.push({ wid: r.workerId, st: r.status || 'applied', selAt: r.selectedAt, confAt: r.confirmedAt, leave: r.leaveStatus ? { st: r.leaveStatus, reason: r.leaveReason, at: r.leaveAt } : null });
     if (r.checkIn || r.checkOut || r.noshow || r.rated) {
-      o.att[r.workerId] = { in: r.checkIn, out: r.checkOut, noshow: r.noshow, rated: Number(r.rated) || 0, home: r.home, paidAt: r.paidAt };
+      o.att[r.workerId] = { in: r.checkIn, out: r.checkOut, noshow: r.noshow, rated: Number(r.rated) || 0, home: r.home, paidAt: r.paidAt, inDist: r.inDist, outDist: r.outDist };
     }
   });
   // ажилчдын статистикийг ирцээс тооцно
@@ -427,7 +474,7 @@ function forStudent_(wid) {
       return {
         id: o.id, proj: o.proj, no: o.no, clientId: o.clientId, cat: o.cat, title: o.title, place: conf ? o.place : '', area: o.area,
         date: o.date, start: o.start, end: o.end, need: o.need, rate: o.rate, req: o.req, transport: o.transport, status: o.status,
-        apps: mine.map(a => ({ wid: a.wid, st: a.st })), att: at ? (function () { const r = {}; r[wid] = at; return r; })() : {}
+        apps: mine.map(a => ({ wid: a.wid, st: a.st, leave: a.leave })), geo: (function () { const P = P_(o.proj); return P.lat !== null && !isNaN(P.lat); })(), att: at ? (function () { const r = {}; r[wid] = at; return r; })() : {}
       };
     });
   const usedP = {};
@@ -589,7 +636,8 @@ function studentAction_(p) {
       case 'sApply': extra = sApply_(c, w, p.ids); break;
       case 'sConfirm': extra = sConfirm_(c, w, p.ids); break;
       case 'sDecline': extra = sDecline_(c, w, p.id); break;
-      case 'sCheck': extra = sCheck_(c, w, p.id, p.code); break;
+      case 'sLeave': extra = sLeave_(c, w, p.id, p.reason); break;
+      case 'sCheck': extra = sCheck_(c, w, p.id, p.code, p.lat, p.lng); break;
       case 'sHome': {
         const o = O_(p.id), r = o && c.regIdx[o.id + '|' + wid];
         if (!r || !r.checkOut) throw fail_('invalid', 'Ээлж дуусаагүй байна.');
@@ -690,6 +738,7 @@ function sConfirm_(c, w, ids) {
 function sDecline_(c, w, id) {
   const o = O_(id), r = o && c.regIdx[o.id + '|' + w.id];
   if (!r || ['applied', 'selected', 'confirmed', 'waitlist'].indexOf(r.status) < 0 || r.checkIn || o.status !== 'open') throw fail_('invalid', 'Татгалзах боломжгүй.');
+  if (r.status === 'confirmed') throw fail_('invalid', 'Баталгаажуулсан ээлжээс гарах бол "Чөлөө хүсэх" товчоор STM-д хүсэлт илгээнэ үү.');
   const wasActive = r.status === 'selected' || r.status === 'confirmed';
   r.status = 'declined';
   c.rg.dirty = true;
@@ -702,7 +751,40 @@ function sDecline_(c, w, id) {
   return { promoted: !!promoted };
 }
 
-function sCheck_(c, w, id, code) {
+// Туршилт: баталгаажсан ээлжээс чөлөө хүсэх. Админ зөвшөөрвөл суудал дараагийн хүнд шилжинэ.
+function sLeave_(c, w, id, reason) {
+  const o = O_(id), r = o && c.regIdx[o.id + '|' + w.id];
+  reason = clean_(reason, 300);
+  if (!r || r.status !== 'confirmed' || r.checkIn || o.status !== 'open' || o.date < S.today) throw fail_('invalid', 'Чөлөө хүсэх боломжгүй.');
+  if (!reason) throw fail_('invalid', 'Шалтгаанаа бичнэ үү.');
+  if (r.leaveStatus === 'pending') throw fail_('invalid', 'Хүсэлт аль хэдийн илгээгдсэн.');
+  r.leaveStatus = 'pending'; r.leaveReason = reason; r.leaveAt = Date.now();
+  c.rg.dirty = true;
+  msg_(c, w.id, 'w', 'Чөлөө хүсэв: ' + shortDate(o.date) + ' "' + o.title + '" (' + o.start + '–' + o.end + '). Шалтгаан: ' + reason);
+  const soon = o.date <= addDays(S.today, 1);
+  notifyAdmin_((soon ? 'ЯАРАЛТАЙ ' : '') + 'Чөлөөний хүсэлт: ' + w.last + ' ' + w.first + ' — ' + o.title + ' ' + o.date, [
+    'Шалтгаан: ' + reason, 'Утас: ' + w.phone, 'Админ апп → Хяналт дээр зөвшөөрөх эсвэл татгалзана.'
+  ], soon);
+  return {};
+}
+
+function aLeave_(c, id, wid, approve) {
+  const o = O_(id), r = o && c.regIdx[o.id + '|' + wid];
+  if (!r || r.leaveStatus !== 'pending') throw fail_('not_found', 'Хүсэлт олдсонгүй.');
+  c.rg.dirty = true;
+  if (!approve) {
+    r.leaveStatus = 'rejected';
+    tellWorker_(c, wid, shortDate(o.date) + '-ны "' + o.title + '" ээлжийн чөлөөний хүсэлтийг зөвшөөрөөгүй. Ээлждээ ирнэ үү, асуух зүйл байвал STM багт бичнэ үү.');
+    return { promoted: null };
+  }
+  r.leaveStatus = 'approved';
+  r.status = 'declined';
+  o.apps.filter(a => a.wid === wid).forEach(a => { a.st = 'declined'; });
+  tellWorker_(c, wid, shortDate(o.date) + '-ны "' + o.title + '" ээлжийн чөлөөг зөвшөөрлөө.');
+  return { promoted: promote_(c, o) };
+}
+
+function sCheck_(c, w, id, code, lat, lng) {
   const o = O_(id), r = o && c.regIdx[o.id + '|' + w.id];
   if (!r || r.status !== 'confirmed') throw fail_('invalid', 'Та энэ ээлжинд баталгаажаагүй байна.');
   // Шөнө дундаас хойш дуусах ээлжийн "Явлаа"-г маргааш өглөө нь ч бүртгэж болно.
@@ -711,11 +793,20 @@ function sCheck_(c, w, id, code) {
   if (o.status !== 'open' || !signed(o)) throw fail_('invalid', 'Энэ ээлж хаагдсан байна.');
   if (r.noshow) throw fail_('invalid', 'Хариуцагч таныг ирээгүй гэж тэмдэглэсэн. STM багт бичнэ үү.');
   if (!checkAttCode_(o.id, code)) throw fail_('code', 'Код буруу эсвэл хугацаа нь дууссан. Хариуцагчийн утсан дээрх шинэ кодыг оруулна уу.');
+  // Туршилт: ажлын байрны координат тохируулсан бол утасны байршлыг шалгана.
+  const P = P_(o.proj);
+  let dist = '';
+  if (P.lat !== null && P.lng !== null && !isNaN(P.lat) && !isNaN(P.lng)) {
+    const la = Number(lat), ln = Number(lng);
+    if (lat === undefined || lat === '' || lat === null || isNaN(la) || isNaN(ln)) throw fail_('geo', 'Байршлаа зөвшөөрнө үү. Энэ ажлын байранд ирцийг байршлаар шалгадаг.');
+    dist = distM_(la, ln, P.lat, P.lng);
+    if (dist > (P.radius || 300)) throw fail_('geo', 'Та ажлын байрнаас ' + dist + ' м зайтай байна (' + (P.radius || 300) + ' м дотор байх ёстой). Ажлын байрандаа ирээд дахин оролдоно уу.');
+  }
   let kind;
-  if (!r.checkIn) { r.checkIn = S.now; kind = 'in'; }
+  if (!r.checkIn) { r.checkIn = S.now; r.inDist = dist; kind = 'in'; }
   else if (!r.checkOut) {
     if (toMin(S.now) - toMin(r.checkIn) < 10 && toMin(S.now) >= toMin(r.checkIn)) throw fail_('invalid', 'Дөнгөж ирц бүртгүүлсэн байна. Ээлж дуусахад "Явлаа" гэж бүртгүүлнэ.');
-    r.checkOut = S.now; kind = 'out';
+    r.checkOut = S.now; r.outDist = dist; kind = 'out';
     if (lateEnd(o)) msg_(c, w.id, 'admin', 'Оройн ээлж дууслаа. Гэртээ хүрээд "Гэртээ хүрлээ" товчийг дарна уу.');
   } else throw fail_('invalid', 'Ирц, явах бүртгэл аль хэдийн хийгдсэн.');
   c.rg.dirty = true;
@@ -958,6 +1049,19 @@ function adminAction_(p) {
         break;
       }
       case 'aRate': rate_(c, O(p.id), p.wid, p.v); break;
+      case 'aLeave': extra = aLeave_(c, p.id, p.wid, p.approve === true); break;
+      case 'aProjectGeo': {
+        const r = byId_(c.pr, P(p.id).id);
+        if (p.lat === '' || p.lat === null || p.lat === undefined) { r.lat = ''; r.lng = ''; }
+        else {
+          const la = Number(p.lat), ln = Number(p.lng);
+          if (!(la > 41 && la < 53 && ln > 87 && ln < 120)) throw fail_('invalid', 'Монгол дахь координат биш байна. Google Maps-аас "47.9184, 106.9177" хэлбэрээр хуулна уу.');
+          r.lat = la; r.lng = ln;
+        }
+        r.radius = Math.max(50, Math.min(2000, Math.round(Number(p.radius) || 300)));
+        c.pr.dirty = true;
+        break;
+      }
       case 'aSendContract': {
         const x = P(p.id), r = byId_(c.pr, x.id), cl = C_(x.clientId);
         if (x.contract.status === 'signed') throw fail_('invalid', 'Гэрээ аль хэдийн зурагдсан.');
@@ -1052,6 +1156,12 @@ function aCreate_(c, user, raw, requestId) {
   const bad = legal(d).filter(x => x.block && !x.ok);
   if (bad.length) throw fail_('invalid', 'Хуулийн шаардлага: ' + bad[0].t);
   if (!d.title || !d.place || !d.letterNo) throw fail_('invalid', 'Албан бичгийн дугаар, ажлын нэр, байрыг бөглөнө үү.');
+  const geo = { lat: '', lng: '', radius: Math.max(50, Math.min(2000, Math.round(Number(raw.radius) || 300))) };
+  if (raw.geo) {
+    const m = String(raw.geo).match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+    if (!m || !(+m[1] > 41 && +m[1] < 53 && +m[2] > 87 && +m[2] < 120)) throw fail_('invalid', 'Координат буруу. Google Maps-аас "47.9184, 106.9177" хэлбэрээр хуулна уу.');
+    geo.lat = +m[1]; geo.lng = +m[2];
+  }
   const year = d.date.slice(0, 4);
   const seq = c.pr.rows.filter(r => String(r.no).indexOf('STM-' + year + '-') === 0).map(r => Number(String(r.no).split('-')[2]) || 0).reduce((a, b) => Math.max(a, b), 0) + 1;
   const id = 'P' + uid_().slice(0, 8);
@@ -1060,7 +1170,8 @@ function aCreate_(c, user, raw, requestId) {
     id: id, createdAt: Date.now(), no: 'STM-' + year + '-' + String(seq).padStart(3, '0'), clientId: cl.id, clientName: cl.name,
     title: d.title, cat: d.cat, place: d.place, area: d.area, from: d.date, to: to, start: d.start, end: d.end, need: d.need, rate: d.rate,
     req: d.req, transport: d.transport, letterNo: d.letterNo, letterDate: d.letterDate, contractStatus: 'draft', sentAt: '', signedAt: '', signer: '',
-    paidUntil: '', requestId: requestId ? String(requestId) : '', createdBy: user
+    paidUntil: '', requestId: requestId ? String(requestId) : '', createdBy: user,
+    lat: geo.lat, lng: geo.lng, radius: geo.radius
   });
   dateRange(d.date, to).forEach((dt, i) => add_(c.dy, { id: id + '-' + (i + 1), projectId: id, n: i + 1, date: dt, status: 'open', doneAt: '' }));
   if (requestId) {
@@ -1079,7 +1190,7 @@ function saveStm_(s) {
     minWage: Math.round(n(s.minWage, 100000, 10000000, 'Хөдөлмөрийн хөлсний доод хэмжээ')),
     minWageNext: s.minWageNext ? Math.round(n(s.minWageNext, 100000, 10000000, 'Дараагийн доод хэмжээ')) : '',
     minWageFrom: /^\d{4}-\d{2}-\d{2}$/.test(s.minWageFrom || '') ? s.minWageFrom : '',
-    weekHours: n(s.weekHours, 1, 60, 'Долоо хоногийн цаг'), notifyStudents: s.notifyStudents === true
+    weekHours: n(s.weekHours, 1, 60, 'Долоо хоногийн цаг'), notifyStudents: s.notifyStudents === true, remind: s.remind !== false
   };
   props_().setProperty('STM', JSON.stringify(Object.assign(cur, next)));
 }
