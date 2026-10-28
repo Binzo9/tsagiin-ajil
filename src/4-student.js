@@ -24,7 +24,7 @@ function sHome(w) {
   if (S.unread[w.id]) todo.push(["info", `${S.unread[w.id]} шинэ мессеж`, "chat"]);
   const fit = openFor(w).filter(o => !blockers(w, o).length).length;
   return `${hello(w)}
-  ${next ? `<section class="hero"><div class="eyebrow">${next.date === TODAY ? "Өнөөдөр" : "Дараагийн ээлж"}</div><h2>${esc(next.title)}</h2><div class="facts"><span><b>${next.date === TODAY ? "Өнөөдөр" : dayLabel(next.date)}</b></span><span><b class="num">${next.start}–${next.end}</b></span><span>${esc(placeFor(next, w))}</span></div><div class="row between"><span class="small">Гарт ≈ <b class="num" style="font-size:1.05rem">${money(pay(next).net)}</b></span><button class="cta" data-a="sview" data-v="mine">${next.date === TODAY ? "Ирцээ бүртгүүлэх" : "Харах"}</button></div></section>` : `<section class="hero"><div class="eyebrow">Шинэ боломж</div><h2>Танд ${fit} өдрийн ажил тохирч байна</h2><button class="cta" data-a="sview" data-v="jobs" style="justify-self:start">Зар харах</button></section>`}
+  ${next ? `<section class="hero"><div class="eyebrow">${next.date === TODAY ? "Өнөөдөр" : "Дараагийн ээлж"}</div><h2>${esc(next.title)}</h2><div class="facts"><span><b>${next.date === TODAY ? "Өнөөдөр" : dayLabel(next.date)}</b></span><span><b class="num">${next.start}–${next.end}</b></span><span>${esc(placeFor(next, w))}</span></div><div class="row between"><span class="small">Гарт ≈ <b class="num" style="font-size:1.05rem">${money(pay(next).net)}</b></span><button class="cta" data-a="sview" data-v="mine">${next.date === TODAY ? "Ирцээ бүртгүүлэх" : "Харах"}</button></div></section>` : `<section class="hero"><div class="eyebrow">Шинэ боломж</div><h2>${fit ? `Танд ${fit} өдрийн ажил тохирч байна` : openFor(w).length ? "Нээлттэй зарын шаардлагыг шалгана уу" : "Шинэ зар гарахад энд мэдэгдэнэ"}</h2><button class="cta" data-a="sview" data-v="jobs" style="justify-self:start">Зар харах</button></section>`}
   <div class="kpis" style="grid-template-columns:repeat(2,1fr)"><div class="kpi"><b class="num">${money(e.pending)}</b><span>Олгох цалин${e.next ? ` · ${shortDate(e.next)}` : ""}</span></div><div class="kpi"><b class="num">${w.done}</b><span>Ажилласан ээлж${w.rn ? ` · ${w.rating.toFixed(1)}★` : ""}</span></div></div>
   ${todo.length ? `<h2>Хийх зүйлс</h2>${todo.map(([k, t, go]) => `<button class="alert ${k}" data-a="sview" data-v="${go}" style="border:0;text-align:left;width:100%">${esc(t)} →</button>`).join("")}` : ""}`;
 }
@@ -89,7 +89,7 @@ function sJobs(w) {
 
 function sMine(w) {
   const mine = S.orders.filter(o => o.apps.some(a => a.wid === w.id));
-  if (!mine.length) return `<h1>Миний ажил</h1><div class="alert info">Та одоогоор ямар ч ажилд бүртгүүлээгүй байна. "Зар" хэсгээс өдрүүдээ сонгоод "За" гэж дарна уу.</div>`;
+  if (!mine.length) return `<h1>Миний ажил</h1><div class="alert info">Та одоогоор ямар ч ажилд бүртгүүлээгүй байна. "Зар" хэсгээс өдрүүдээ сонгоод "Бүртгүүлэх" гэж дарна уу.</div>`;
   const myA = o => o.apps.find(a => a.wid === w.id);
   const cur = mine.filter(o => { const at = o.att[w.id] || {}; const st = myA(o).st; if (st === "declined") return false; if (o.status === "done") return lateEnd(o) && at.out && !at.home && daysBetween(o.date, TODAY) <= 1; return !(at.out && !(lateEnd(o) && !at.home)); }).sort((a, b) => a.date < b.date ? -1 : 1);
   const fin = mine.filter(o => !cur.includes(o)).sort((a, b) => a.date < b.date ? 1 : -1);

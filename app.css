@@ -304,7 +304,9 @@ input:focus,select:focus,textarea:focus{outline:none;box-shadow:0 0 0 3px rgba(2
 .side button:hover{background:var(--sunk);color:var(--fg)}
 .side button[aria-current="page"]{background:var(--blue-soft);color:#1E3A8A;border:0;box-shadow:none}
 .side .badge{background:var(--bad);border:0}
-@media (max-width:760px){.side{border-right:0;border-bottom:1px solid var(--line)}}
+@media (max-width:760px){.side{border-right:0;border-bottom:1px solid var(--line)}.shell{grid-template-rows:auto 1fr}}
+select{max-width:100%;min-width:0;text-overflow:ellipsis}
+.row>select{flex:1 1 140px}
 
 /* оюутны апп */
 .phone{
@@ -355,3 +357,5 @@ body::before{background:var(--blue);height:3px}
   .top .demo{max-width:42vw;font-size:.66rem}
   .top .btn.sm{padding:5px 8px}
 }
+.row>.row{min-width:0;max-width:100%}
+.wrap{grid-template-columns:minmax(0,1fr)}.card>.row.between>span{min-width:0}

@@ -1,5 +1,5 @@
 // Апп-ын бүрхүүлийг кэшлэнэ. Өгөгдөл (Apps Script) кэшлэхгүй.
-const CACHE = "stm-v4";
+const CACHE = "stm-v5";
 const SHELL = ["index.html", "admin.html", "company.html", "qrcode.js", "app.css", "app.js", "logic.js", "config.js", "icons/logo.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
