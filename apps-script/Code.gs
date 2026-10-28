@@ -1630,6 +1630,13 @@ const GH_REPO = 'Binzo9/tsagiin-ajil';
 const SELF_VER = 4;
 const WEB_ID = 'AKfycbwUypzNEwXU56GAWrZeMJe0YJGGen6vdkGsNBi5n4J4GGEDPSCBnO3RpxQZZ4IX_XR3'; // config.js-ийн /exec хаягийн ID
 
+// Редактор дээр нэг удаа ажиллуулж бүх эрхийг зөвшөөрүүлнэ (GitHub, Apps Script API).
+function checkAccess() {
+  const c = UrlFetchApp.fetch('https://api.github.com/repos/' + GH_REPO + '/commits/main', { muteHttpExceptions: true }).getResponseCode();
+  const d = gapi_('get', 'projects/' + ScriptApp.getScriptId() + '/deployments').deployments || [];
+  Logger.log('GitHub: ' + c + ', deployments: ' + d.length + ', web app: ' + d.some(x => WEB_ID.indexOf(x.deploymentId) >= 0));
+}
+
 function ghFile_(path, ref) {
   const urls = [
     'https://api.github.com/repos/' + GH_REPO + '/contents/' + path + '?ref=' + ref,
