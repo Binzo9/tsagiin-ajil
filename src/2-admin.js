@@ -268,6 +268,7 @@ function aWorkers() {
 }
 function workerModal(w) {
   modal(`<h2>${esc(w.last)} ${esc(w.first)}</h2><div class="small muted">${esc(w.phone)}${w.email ? " · " + esc(w.email) : ""} · ${esc(w.birth)} (${w.age} нас)<br>Бүртгүүлсэн: ${fmtTs(w.createdAt)} · Гэрээ: ${esc(w.signed)}</div>
+  <div class="card" style="background:var(--sunk);gap:6px;padding:12px"><b class="small">CV ${BETA}</b>${cvView(w.cv)}</div>
   <label class="f">Цагаан хуудас дуусах огноо (хуудсыг үзэж шалгасны дараа)<input id="ew_health" type="date" value="${esc(w.health || "")}"></label>
   <label class="chk"><input type="checkbox" id="ew_license" ${w.license ? "checked" : ""}> Жолооны үнэмлэхтэй (шалгасан)</label>
   <label class="f">Гадаад хэл<input id="ew_lang" type="text" value="${esc(w.lang || "")}"></label>

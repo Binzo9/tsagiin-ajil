@@ -498,6 +498,7 @@ function aWorkers() {
 }
 function workerModal(w) {
   modal(`<h2>${esc(w.last)} ${esc(w.first)}</h2><div class="small muted">${esc(w.phone)}${w.email ? " · " + esc(w.email) : ""} · ${esc(w.birth)} (${w.age} нас)<br>Бүртгүүлсэн: ${fmtTs(w.createdAt)} · Гэрээ: ${esc(w.signed)}</div>
+  <div class="card" style="background:var(--sunk);gap:6px;padding:12px"><b class="small">CV ${BETA}</b>${cvView(w.cv)}</div>
   <label class="f">Цагаан хуудас дуусах огноо (хуудсыг үзэж шалгасны дараа)<input id="ew_health" type="date" value="${esc(w.health || "")}"></label>
   <label class="chk"><input type="checkbox" id="ew_license" ${w.license ? "checked" : ""}> Жолооны үнэмлэхтэй (шалгасан)</label>
   <label class="f">Гадаад хэл<input id="ew_lang" type="text" value="${esc(w.lang || "")}"></label>
@@ -808,7 +809,26 @@ function sHome(w) {
 let pickDays = {};
 function sJobs(w) {
   const open = S.orders.filter(o => o.status === "open" && signed(o) && o.date >= TODAY);
-  const projIds = [...new Set(open.map(o => o.proj))];
+  const F = V.jf || (V.jf = { q: "", cat: "", area: "", rate: "", when: "" });
+  const wk = addDays(TODAY, 7);
+  const allIds = [...new Set(open.map(o => o.proj))];
+  const projIds = allIds.filter(pid => { const P = P_(pid); const ds = open.filter(o => o.proj === pid);
+    if (F.q && !(P.title + " " + alias(P.clientId) + " " + (P.area || "")).toLowerCase().includes(F.q.toLowerCase())) return false;
+    if (F.cat && P.cat !== F.cat) return false;
+    if (F.area && (P.area || "") !== F.area) return false;
+    if (F.rate && P.rate < +F.rate) return false;
+    if (F.when === "today" && !ds.some(o => o.date === TODAY)) return false;
+    if (F.when === "week" && !ds.some(o => o.date <= wk)) return false;
+    if (F.when === "weekend" && !ds.some(o => dow(o.date) >= 5)) return false;
+    return true; });
+  const areas = [...new Set(allIds.map(pid => P_(pid).area).filter(Boolean))].sort(), cats = [...new Set(allIds.map(pid => P_(pid).cat))];
+  const nF = ["q", "cat", "area", "rate", "when"].filter(k => F[k]).length;
+  const filterBar = allIds.length ? `<div class="card" style="gap:8px;padding:12px"><div class="row" style="gap:6px;flex-wrap:nowrap"><input id="jf_q" type="search" placeholder="🔎 Ажил, байгууллага, дүүрэг" value="${esc(F.q)}" style="flex:1">${nF ? '<button class="btn sm" data-a="jfClear">Цэвэрлэх</button>' : ""}</div>
+  <div class="row" style="gap:6px"><select data-jf="cat"><option value="">Бүх ангилал</option>${cats.map(k => `<option value="${k}" ${F.cat === k ? "selected" : ""}>${CATS[k].n}</option>`).join("")}</select>
+  <select data-jf="area"><option value="">Бүх дүүрэг</option>${areas.map(a => `<option ${F.area === a ? "selected" : ""}>${esc(a)}</option>`).join("")}</select>
+  <select data-jf="when"><option value="">Хэзээ ч</option><option value="today" ${F.when === "today" ? "selected" : ""}>Өнөөдөр</option><option value="week" ${F.when === "week" ? "selected" : ""}>7 хоногт</option><option value="weekend" ${F.when === "weekend" ? "selected" : ""}>Амралтын өдөр</option></select>
+  <select data-jf="rate"><option value="">Цалин: бүгд</option>${[6000, 7000, 8000, 10000].map(r => `<option value="${r}" ${+F.rate === r ? "selected" : ""}>${money(r)}+/цаг</option>`).join("")}</select></div>
+  <div class="small muted">${projIds.length} / ${allIds.length} зар ${BETA}</div></div>` : "";
   const cards = projIds.map(pid => {
     const P = P_(pid); const all = daysOf(P);
     const ds = open.filter(o => o.proj === pid && (o.date > TODAY || toMin(S.now) < toMin(o.start)));
@@ -841,7 +861,7 @@ function sJobs(w) {
       ${can.length ? `<div class="row between"><span class="small">Сонгосон: <b class="num">${sel.size}</b> өдөр ≈ <b class="num">${money(total)}</b> (суутгалын өмнө)</span><button class="cta" data-a="applyMany" data-v="${pid}" ${sel.size ? "" : "disabled"}>За, бүртгүүлье</button></div>` : '<div class="small muted">Таны сул цагт таарах бүх өдөрт бүртгүүлсэн байна.</div>'}`}
     </article>`;
   }).join("");
-  return `${hello(w)}<h2>Нээлттэй ажил</h2><p class="small muted">Хаяг нь баталгаажуулсны дараа харагдана. Сул өдөр, цагаа "Би" хэсгээс өөрчилнө.</p>${cards || '<div class="alert info">Одоогоор нээлттэй зар алга. Шинэ зар гарахад энд харагдана.</div>'}`;
+  return `${hello(w)}<h2>Нээлттэй ажил</h2><p class="small muted">Хаяг нь баталгаажуулсны дараа харагдана. Сул өдөр, цагаа "Би" хэсгээс өөрчилнө.</p>${filterBar}${cards || (nF && allIds.length ? '<div class="alert info">Шүүлтүүрт таарах зар алга. Шүүлтүүрээ өөрчилнө үү.</div>' : '<div class="alert info">Одоогоор нээлттэй зар алга. Шинэ зар гарахад энд харагдана.</div>')}`;
 }
 
 function sMine(w) {
@@ -927,6 +947,20 @@ function sPay(w) {
   <div class="tbl"><table><thead><tr><th>Өдөр</th><th class="r">Цаг</th><th class="r">Гарт</th><th>Олголт</th></tr></thead><tbody>${os.map(o => { const p = pay(o); const pd = o.att[w.id].paidAt; return `<tr><td class="num">${shortDate(o.date)}</td><td class="r num">${p.h}</td><td class="r num"><b>${money(p.net)}</b></td><td>${pd ? '<span class="pill p-ok">Олгосон</span>' : `<span class="pill p-blue">${shortDate(payDate(o))}</span>`}</td></tr>`; }).join("")}</tbody></table></div></section>`; }).join("") : '<div class="alert info">Одоогоор дууссан ээлж алга. Ээлжээ дуусгаад "Явлаа" гэж бүртгүүлэхэд цалингийн тооцоо энд гарна.</div>'}`;
 }
 
+function cvCard(w) {
+  const cv = w.cv || {}, filled = !!(cv.about || cv.exp || cv.skills);
+  return `<div class="card"><div class="row between"><h3>Миний CV ${BETA}</h3>${filled ? '<span class="pill p-ok">Бөглөсөн</span>' : '<span class="pill p-warn">Хоосон</span>'}</div>
+  <p class="small muted">STM таныг ажилд сонгохдоо үүнийг хардаг.</p>
+  <label class="f">Өөрийнхөө тухай товч<textarea id="cv_about" rows="3" maxlength="400" placeholder="Жишээ: Хариуцлагатай, хүмүүстэй харилцах дуртай. Амралтын өдрүүдэд ажиллах боломжтой.">${esc(cv.about || "")}</textarea></label>
+  <label class="f">Ажлын туршлага (мөр бүрт нэг)<textarea id="cv_exp" rows="3" maxlength="800" placeholder="2025 · Номин супермаркет · бараа өрөх\n2024 · Хурим · зочин угтах">${esc(cv.exp || "")}</textarea></label>
+  <label class="f">Ур чадвар (таслалаар)<input id="cv_skills" type="text" maxlength="200" value="${esc(cv.skills || "")}" placeholder="Англи хэл, касс, Excel, жолоо"></label>
+  <button class="btn primary" data-a="saveCv" style="justify-self:start">CV хадгалах</button></div>`;
+}
+function cvView(cv) {
+  cv = cv || {};
+  if (!cv.about && !cv.exp && !cv.skills) return '<div class="small muted">CV бөглөөгүй.</div>';
+  return `${cv.about ? `<p class="small" style="white-space:pre-line;margin:0">${esc(cv.about)}</p>` : ""}${cv.exp ? `<div class="small"><b>Туршлага</b><div style="white-space:pre-line">${esc(cv.exp)}</div></div>` : ""}${cv.skills ? `<div class="row" style="gap:4px">${cv.skills.split(",").map(s => s.trim()).filter(Boolean).map(s => `<span class="tag">${esc(s)}</span>`).join("")}</div>` : ""}`;
+}
 function sMe(w) {
   const hd = w.health ? daysBetween(TODAY, w.health) : null;
   const passed = Object.keys(w.tests).filter(cid => S.trainings[cid] && w.tests[cid].score >= S.trainings[cid].pass).length;
@@ -939,6 +973,7 @@ function sMe(w) {
   <label class="f">Гадаад хэл<input id="me_lang" type="text" value="${esc(w.lang || "")}"></label>
   <label class="f">Имэйл<input id="me_email" type="email" value="${esc(w.email || "")}"></label>
   <button class="btn primary" data-a="saveProfile" style="justify-self:start">Хадгалах</button></div>
+  ${cvCard(w)}
   <div class="card"><h3>Бичиг баримт</h3>
   <div class="row between small"><span>Цагаан хуудас</span>${w.health ? `<span class="pill ${hd < 0 ? "p-bad" : hd <= 30 ? "p-warn" : "p-ok"}">${hd < 0 ? "Дууссан" : "Хүчинтэй"}: ${w.health}</span>` : '<span class="pill p-grey">Байхгүй</span>'}</div>
   ${!w.health || hd <= 30 ? `<div class="alert warn small">${!w.health ? "Амталгаа, хоолны ажилд цагаан хуудас шаардлагатай." : hd < 0 ? "Хугацаа дууссан." : "Хугацаа " + hd + " хоногийн дараа дуусна."} Хуудсаа STM-ийн оффист авчирч үзүүлнэ үү.</div>` : ""}
@@ -1118,6 +1153,8 @@ const act = {
     if (!days.length || !shifts.length) { toast("Дор хаяж нэг өдөр, нэг цаг сонгоно уу", true); return "skip"; }
     return call("sProfile", { days, shifts, lang: val("me_lang"), email: val("me_email") }, "Хадгаллаа").then(() => { pickDays = {}; }).catch(() => {});
   },
+  saveCv: () => call("sProfile", { days: W_(S.me).days, shifts: W_(S.me).shifts, cv: { about: val("cv_about"), exp: val("cv_exp"), skills: val("cv_skills") } }, "CV хадгалагдлаа").catch(() => {}),
+  jfClear: () => { V.jf = null; },
   showContract: () => { modal(`<h2>Ерөнхий гэрээ (хураангуй)</h2>${generalContract()}<p class="small muted">Цахимаар баталгаажуулсан: ${esc(W_(S.me).signed)}</p><button class="btn" data-a="closeModal">Хаах</button>`); return "skip"; }
 };
 
@@ -1137,6 +1174,8 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", e => {
   const t = e.target;
+  if (t.dataset.jf) { V.jf[t.dataset.jf] = t.value; render(); return; }
+  if (t.id === "jf_q") { V.jf.q = t.value.trim(); render(); return; }
   if (t.id === "statPick") { V.statUnit = t.value; render(); return; }
   if (t.id === "docPick") { V.docUnit = t.value; render(); return; }
   if (t.id === "watched") { quiz.watched = t.checked; $("#toTestBtn").disabled = !t.checked; return; }

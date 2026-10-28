@@ -128,6 +128,8 @@ const act = {
     if (!days.length || !shifts.length) { toast("Дор хаяж нэг өдөр, нэг цаг сонгоно уу", true); return "skip"; }
     return call("sProfile", { days, shifts, lang: val("me_lang"), email: val("me_email") }, "Хадгаллаа").then(() => { pickDays = {}; }).catch(() => {});
   },
+  saveCv: () => call("sProfile", { days: W_(S.me).days, shifts: W_(S.me).shifts, cv: { about: val("cv_about"), exp: val("cv_exp"), skills: val("cv_skills") } }, "CV хадгалагдлаа").catch(() => {}),
+  jfClear: () => { V.jf = null; },
   showContract: () => { modal(`<h2>Ерөнхий гэрээ (хураангуй)</h2>${generalContract()}<p class="small muted">Цахимаар баталгаажуулсан: ${esc(W_(S.me).signed)}</p><button class="btn" data-a="closeModal">Хаах</button>`); return "skip"; }
 };
 
@@ -147,6 +149,8 @@ document.addEventListener("input", e => {
 });
 document.addEventListener("change", e => {
   const t = e.target;
+  if (t.dataset.jf) { V.jf[t.dataset.jf] = t.value; render(); return; }
+  if (t.id === "jf_q") { V.jf.q = t.value.trim(); render(); return; }
   if (t.id === "statPick") { V.statUnit = t.value; render(); return; }
   if (t.id === "docPick") { V.docUnit = t.value; render(); return; }
   if (t.id === "watched") { quiz.watched = t.checked; $("#toTestBtn").disabled = !t.checked; return; }

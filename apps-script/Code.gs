@@ -37,8 +37,8 @@ const WORKERS = T_('wk', 'Оюутнууд', [
   ['phone', 'Утас'], ['email', 'Имэйл'], ['birth', 'Төрсөн огноо'], ['school', 'Сургууль'], ['major', 'Мэргэжил, курс'],
   ['days', 'Сул өдөр'], ['shifts', 'Сул цаг'], ['health', 'Цагаан хуудас дуусах'], ['license', 'Жолооны үнэмлэх'],
   ['lang', 'Гадаад хэл'], ['signedAt', 'Ерөнхий гэрээ'], ['tests', 'Тест'], ['note', 'Тэмдэглэл'],
-  ['salt', 'salt'], ['hash', 'hash'], ['lastLogin', 'Сүүлд нэвтэрсэн']
-], { ts: ['createdAt', 'signedAt', 'lastLogin'], day: ['birth', 'health'], bool: ['license'], json: ['tests'] });
+  ['salt', 'salt'], ['hash', 'hash'], ['lastLogin', 'Сүүлд нэвтэрсэн'], ['cv', 'CV']
+], { ts: ['createdAt', 'signedAt', 'lastLogin'], day: ['birth', 'health'], bool: ['license'], json: ['tests', 'cv'] });
 const PROJECTS = T_('pr', 'Төслүүд', [
   ['id', 'id'], ['createdAt', 'Үүсгэсэн'], ['no', 'Дугаар'], ['clientId', 'Захиалагчийн id'], ['clientName', 'Захиалагч'],
   ['title', 'Ажлын нэр'], ['cat', 'Ангилал'], ['place', 'Хаяг'], ['area', 'Дүүрэг'], ['from', 'Эхлэх'], ['to', 'Дуусах'],
@@ -397,7 +397,7 @@ function state_(c) {
       id: r.id, last: r.lastName, first: r.firstName, phone: r.phone, email: r.email, birth: r.birth, age: ageAt(r.birth, today),
       school: r.school, major: r.major, days: listIdx_(r.days, DAYS), shifts: listIdx_(r.shifts, SHIFTS),
       health: r.health, license: r.license, lang: r.lang, signed: dayOf_(r.signedAt), status: r.status || 'active', note: r.note,
-      tests: r.tests || {}, createdAt: r.createdAt, lastLogin: r.lastLogin,
+      tests: r.tests || {}, createdAt: r.createdAt, lastLogin: r.lastLogin, cv: r.cv || {},
       done: s.done, noshow: s.noshow, late: s.late, rn: s.rn, rating: s.rn ? s.rsum / s.rn : 0,
       resp: avgH === null ? .75 : Math.max(.3, Math.min(1, 1 - avgH / 4))
     };
@@ -671,6 +671,10 @@ function studentAction_(p) {
         row.days = days.map(i => DAYS[i]).join(', ');
         row.shifts = shifts.map(i => SHIFTS[i]).join(', ');
         if (p.lang !== undefined) row.lang = clean_(p.lang, 60);
+        if (p.cv && typeof p.cv === 'object') {
+          const ml = (v, n) => String(v || '').replace(/\r/g, '').slice(0, n).trim();
+          row.cv = { about: ml(p.cv.about, 400), exp: ml(p.cv.exp, 800), skills: clean_(p.cv.skills, 200), at: Date.now() };
+        }
         if (p.email !== undefined) {
           const e = normEmail_(p.email);
           if (e && !/^\S+@\S+\.\S+$/.test(e)) throw fail_('invalid', 'Имэйл зөв биш байна.');
