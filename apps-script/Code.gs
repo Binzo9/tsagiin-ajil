@@ -995,6 +995,7 @@ function adminAction_(p) {
     case 'changePassword': return changePassword_(user, p.current, p.next);
     case 'addAdmin': return addAdmin_(p.name, p.password);
     case 'removeAdmin': return removeAdmin_(user, p.name);
+    case 'aSelfUpdate': return selfUpdate_(user, !!p.dry);
   }
   return mutate_(c => {
     const O = id => { const o = O_(id); if (!o) throw fail_('not_found', 'Өдөр олдсонгүй. Жагсаалтаа шинэчилнэ үү.'); return o; };
@@ -1617,4 +1618,74 @@ function fail_(code, message) {
 
 function out_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+
+
+/* ===================== Серверийг GitHub-аас шинэчлэх ===================== */
+// Админ "Серверийг шинэчлэх" дарахад GitHub (main) дээрх apps-script/Code.gs, Logic.gs-ийг татаж,
+// энэ төслийн кодыг сольж, шинэ хувилбар гаргаад одоо ажиллаж буй web app-ыг түүн рүү шилжүүлнэ.
+// Нэг удаагийн тохиргоо: script.google.com/home/usersettings → "Google Apps Script API" асаалттай,
+// appsscript.json-д script.projects, script.deployments, script.external_request эрх.
+const GH_REPO = 'Binzo9/tsagiin-ajil';
+const SELF_VER = 3;
+const WEB_ID = 'AKfycbwkvQ6QrWQ_qBkPtQO09veHU9U-0LpKh-A512D9zj4OL1MUJnEKlSYgBtDM8CVzbeim6w'; // config.js-ийн /exec хаягийн ID
+
+function ghFile_(path, ref) {
+  const urls = [
+    'https://api.github.com/repos/' + GH_REPO + '/contents/' + path + '?ref=' + ref,
+    'https://raw.githubusercontent.com/' + GH_REPO + '/' + ref + '/' + path
+  ];
+  for (let i = 0; i < urls.length; i++) {
+    const r = UrlFetchApp.fetch(urls[i], { muteHttpExceptions: true, headers: i === 0 ? { Accept: 'application/vnd.github.raw' } : {} });
+    if (r.getResponseCode() === 200) return r.getContentText('UTF-8');
+  }
+  throw fail_('error', 'GitHub-аас ' + path + ' татаж чадсангүй.');
+}
+
+function gapi_(method, url, body) {
+  const r = UrlFetchApp.fetch('https://script.googleapis.com/v1/' + url, {
+    method: method, contentType: 'application/json', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    payload: body ? JSON.stringify(body) : undefined
+  });
+  const j = JSON.parse(r.getContentText() || '{}');
+  if (r.getResponseCode() >= 300) {
+    const m = (j.error && j.error.message) || r.getContentText();
+    if (/has not been used|is disabled|SERVICE_DISABLED|User has not enabled/i.test(m)) throw fail_('setup', 'Google Apps Script API унтраалттай байна. script.google.com/home/usersettings дээр асаана уу.');
+    throw fail_('error', 'Apps Script API: ' + m);
+  }
+  return j;
+}
+
+function selfUpdate_(user, dry) {
+  const sid = ScriptApp.getScriptId();
+  let ref = 'main';
+  try {
+    const c = UrlFetchApp.fetch('https://api.github.com/repos/' + GH_REPO + '/commits/main', { muteHttpExceptions: true });
+    if (c.getResponseCode() === 200) ref = JSON.parse(c.getContentText()).sha;
+  } catch (e) {}
+  const cur = gapi_('get', 'projects/' + sid + '/content');
+  const files = cur.files || [];
+  const oldCode = (files.filter(f => f.name === 'Code')[0] || {}).source || '';
+  let code = ghFile_('apps-script/Code.gs', ref), logic = ghFile_('apps-script/Logic.gs', ref);
+  if (code.indexOf('function doPost') < 0 || code.indexOf('function selfUpdate_') < 0 || logic.indexOf('CATS') < 0) throw fail_('invalid', 'GitHub дээрх код дутуу байна. Шинэчлээгүй.');
+  // Ажиллаж буй төслийн Sheet ID-г хадгална.
+  const idLine = /const SPREADSHEET_ID = '[^']*';/;
+  const m = oldCode.match(idLine);
+  if (m) code = code.replace(idLine, m[0]);
+  const same = oldCode === code && ((files.filter(f => f.name === 'Logic')[0] || {}).source || '') === logic;
+  if (dry) return { ok: true, ref: ref.slice(0, 7), same: same, ver: SELF_VER };
+  if (same) return { ok: true, ref: ref.slice(0, 7), same: true, msg: 'Сервер аль хэдийн хамгийн сүүлийн кодтой байна.' };
+  const out = files.filter(f => f.name !== 'Code' && f.name !== 'Logic').map(f => ({ name: f.name, type: f.type, source: f.source }));
+  out.push({ name: 'Logic', type: 'SERVER_JS', source: logic });
+  out.push({ name: 'Code', type: 'SERVER_JS', source: code });
+  gapi_('put', 'projects/' + sid + '/content', { files: out });
+  const v = gapi_('post', 'projects/' + sid + '/versions', { description: 'GitHub ' + ref.slice(0, 7) + ' (' + user + ')' });
+  const url = (ScriptApp.getService().getUrl() || '') + ' ' + WEB_ID;
+  const deps = (gapi_('get', 'projects/' + sid + '/deployments').deployments || []);
+  const dep = deps.filter(d => url.indexOf(d.deploymentId) >= 0)[0]
+    || deps.filter(d => d.deploymentConfig && d.deploymentConfig.versionNumber && (d.entryPoints || []).some(e => e.webApp))[0];
+  if (!dep) throw fail_('error', 'Web app deployment олдсонгүй. Код шинэчлэгдсэн, Deploy → Manage deployments-оор хувилбар ' + v.versionNumber + '-г сонгоно уу.');
+  gapi_('put', 'projects/' + sid + '/deployments/' + dep.deploymentId, { deploymentConfig: { scriptId: sid, versionNumber: v.versionNumber, manifestFileName: 'appsscript', description: dep.deploymentConfig.description || 'STM' } });
+  return { ok: true, ref: ref.slice(0, 7), version: v.versionNumber, msg: 'Сервер шинэчлэгдлээ: хувилбар ' + v.versionNumber + ' (GitHub ' + ref.slice(0, 7) + ').' };
 }

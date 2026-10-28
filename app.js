@@ -671,6 +671,10 @@ function aSettings() {
   <label class="chk"><input id="s_notifyStudents" type="checkbox" ${s.notifyStudents ? "checked" : ""}> Сонгогдсон оюутанд имэйлээр мэдэгдэх (имэйлтэй бол; өдөрт ~100 имэйлийн хязгаартай)</label>
   <div class="alert warn">Суутгалын хувь жишээ. Одоо мөрдөж буй хувийг нягтлан бодогчоор шалгуулна.</div>
   <button class="btn primary" data-a="saveSettings">Хадгалах</button></section>
+  <section class="card" style="max-width:560px"><h2>Серверийн код</h2>
+  <p class="small muted">GitHub дээр серверийн кодонд засвар орсон бол энэ товчоор серверийг шинэчилнэ. Утаснаас ч дарж болно. Хаяг өөрчлөгдөхгүй.</p>
+  <div class="row"><button class="btn primary" data-a="selfUpdate">Серверийг шинэчлэх</button><button class="btn sm" data-a="selfCheck">Шалгах</button></div>
+  ${V.selfMsg ? `<div class="alert ${V.selfErr ? "bad" : "info"} small">${esc(V.selfMsg)}</div>` : ""}</section>
   <section class="card" style="max-width:560px"><h2>Админд ирэх мэдэгдэл</h2>
   ${c ? `<label class="chk"><input type="checkbox" id="cfg_notify" ${c.notify ? "checked" : ""}> Шинэ хүсэлт, гэрээ зурсан тухай имэйл авах</label>
   <label class="f">Мэдэгдэл авах имэйл (хоосон бол ${esc(c.ownerEmail || "таны Google имэйл")})<input id="cfg_email" type="text" value="${esc(c.notifyEmail || "")}"></label>
@@ -1064,6 +1068,8 @@ const act = {
     return call("aSaveTraining", { cid: V.trainClient, training: { title: e.title, video: e.video, mins: e.mins, pass: e.pass, steps: e.steps, qs } }, "Сургалт хадгалагдлаа").then(r => { if (r) { V.editTrain = null; render(); } }).catch(() => {});
   },
   delTrain: () => { ask("Сургалтыг устгах уу? Оюутнууд тестгүйгээр бүртгүүлэх болно.", "Устгах", () => call("aDeleteTraining", { cid: V.trainClient }, "Устгалаа").then(() => { V.editTrain = null; render(); }).catch(() => {}), true); return "skip"; },
+  selfCheck: () => { setBusy(1); return api("aSelfUpdate", { token: TOKEN, dry: true }).then(r => { V.selfErr = false; V.selfMsg = r.same ? `Сервер хамгийн сүүлийн кодтой байна (GitHub ${r.ref}).` : `GitHub дээр шинэ код байна (${r.ref}). «Серверийг шинэчлэх» дарна уу.`; }).catch(e => { V.selfErr = true; V.selfMsg = e.message; }).finally(() => { setBusy(-1); render(); }); },
+  selfUpdate: () => { V.selfErr = false; V.selfMsg = "Шинэчилж байна… (30–60 сек)"; render(); setBusy(1); return api("aSelfUpdate", { token: TOKEN }).then(r => { V.selfMsg = r.msg; }).catch(e => { V.selfErr = true; V.selfMsg = e.message; }).finally(() => { setBusy(-1); render(); }); },
   saveSettings: () => call("aSaveSettings", { settings: { fee: +val("s_fee"), vat: checked("s_vat"), ndsh: +val("s_ndsh"), pit: +val("s_pit"), payoutDays: +val("s_payoutDays"), weekHours: +val("s_weekHours"), minWage: +val("s_minWage"), minWageNext: +val("s_minWageNext") || "", minWageFrom: val("s_minWageFrom"), reserveNew: checked("s_reserveNew"), notifyStudents: checked("s_notifyStudents"), remind: checked("s_remind") } }, "Хадгаллаа").catch(() => {}),
   saveConfig: () => { setBusy(1); return api("saveConfig", { token: TOKEN, config: { notify: checked("cfg_notify"), notifyEmail: val("cfg_email") } }).then(r => { adminCfg = r.config; render(); toast("Хадгаллаа"); }).catch(e => toast(e.message, true)).finally(() => setBusy(-1)); },
   addAdmin: () => { setBusy(1); return api("addAdmin", { token: TOKEN, name: val("na_name"), password: val("na_pw") }).then(r => { adminCfg.admins = r.admins; render(); toast("Админ нэмлээ"); }).catch(e => toast(e.message, true)).finally(() => setBusy(-1)); },

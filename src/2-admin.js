@@ -441,6 +441,10 @@ function aSettings() {
   <label class="chk"><input id="s_notifyStudents" type="checkbox" ${s.notifyStudents ? "checked" : ""}> Сонгогдсон оюутанд имэйлээр мэдэгдэх (имэйлтэй бол; өдөрт ~100 имэйлийн хязгаартай)</label>
   <div class="alert warn">Суутгалын хувь жишээ. Одоо мөрдөж буй хувийг нягтлан бодогчоор шалгуулна.</div>
   <button class="btn primary" data-a="saveSettings">Хадгалах</button></section>
+  <section class="card" style="max-width:560px"><h2>Серверийн код</h2>
+  <p class="small muted">GitHub дээр серверийн кодонд засвар орсон бол энэ товчоор серверийг шинэчилнэ. Утаснаас ч дарж болно. Хаяг өөрчлөгдөхгүй.</p>
+  <div class="row"><button class="btn primary" data-a="selfUpdate">Серверийг шинэчлэх</button><button class="btn sm" data-a="selfCheck">Шалгах</button></div>
+  ${V.selfMsg ? `<div class="alert ${V.selfErr ? "bad" : "info"} small">${esc(V.selfMsg)}</div>` : ""}</section>
   <section class="card" style="max-width:560px"><h2>Админд ирэх мэдэгдэл</h2>
   ${c ? `<label class="chk"><input type="checkbox" id="cfg_notify" ${c.notify ? "checked" : ""}> Шинэ хүсэлт, гэрээ зурсан тухай имэйл авах</label>
   <label class="f">Мэдэгдэл авах имэйл (хоосон бол ${esc(c.ownerEmail || "таны Google имэйл")})<input id="cfg_email" type="text" value="${esc(c.notifyEmail || "")}"></label>
