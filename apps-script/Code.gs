@@ -1438,16 +1438,18 @@ function cPassword_(co, current, next) {
 
 function login_(user, pw) {
   const cache = CacheService.getScriptCache();
-  const fails = Number(cache.get('fails') || 0);
-  if (fails >= 5) throw fail_('locked', 'Олон удаа буруу оруулсан тул 10 минут түгжигдлээ.');
-  if (!admins_().length) throw fail_('setup', 'Админ тохируулаагүй байна.');
   user = String(user || '').trim();
+  // Түгжээг нэвтрэх нэр тус бүрээр тоолно: нэг нэр дээрх буруу оролдлого бусад админыг түгжихгүй.
+  const key = 'fails:' + user.toLowerCase().slice(0, 60);
+  const fails = Number(cache.get(key) || 0);
+  if (fails >= 5) throw fail_('locked', 'Энэ нэрээр олон удаа буруу оруулсан тул 10 минут түгжигдлээ.');
+  if (!admins_().length) throw fail_('setup', 'Админ тохируулаагүй байна.');
   const real = adminPassword_(user);
   if (real === null || String(pw || '') !== real) {
-    cache.put('fails', String(fails + 1), 600);
+    cache.put(key, String(fails + 1), 600);
     throw fail_('auth', 'Нэр эсвэл нууц үг буруу байна.');
   }
-  cache.remove('fails');
+  cache.remove(key);
   return { ok: true, user: user, token: token_(user) };
 }
 
